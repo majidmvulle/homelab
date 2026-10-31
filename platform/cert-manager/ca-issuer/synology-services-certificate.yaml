@@ -1,0 +1,21 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: synology-services
+  namespace: cert-manager
+spec:
+  secretName: synology-services-tls
+  issuerRef:
+    name: ca-issuer
+    kind: ClusterIssuer
+  commonName: synology01.homelab.internal
+  duration: 8760h
+  renewBefore: 720h
+  dnsNames:
+    - synology01.homelab.internal
+    - files.homelab.internal
+    - photos.homelab.internal
+    - s3.homelab.internal
+  privateKey:
+    algorithm: RSA
+    size: 2048

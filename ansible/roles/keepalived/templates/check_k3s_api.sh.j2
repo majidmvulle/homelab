@@ -1,0 +1,21 @@
+#!/bin/sh
+set -eu
+
+# Ensure local k3s service is running.
+if ! systemctl is-active --quiet k3s; then
+  exit 1
+fi
+
+# Ensure local apiserver is responding as ready.
+if command -v curl >/dev/null 2>&1; then
+  curl -kfsS --max-time 2 https://127.0.0.1:6443/readyz >/dev/null
+  exit 0
+fi
+
+# Fallback when curl is unavailable.
+if command -v wget >/dev/null 2>&1; then
+  wget -q --spider --timeout=2 --no-check-certificate https://127.0.0.1:6443/readyz
+  exit 0
+fi
+
+exit 1

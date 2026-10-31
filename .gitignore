@@ -1,0 +1,6 @@
+.idea
+.DS_Store
+.env
+temps
+out
+.playwright-mcp/

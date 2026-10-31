@@ -1,0 +1,13 @@
+Raspberry Pi host summary
+
+Host: {{ inventory_hostname }}
+Platform: {{ device_platform | default('raspberry-pi') }}
+Role: {{ network_role | default('unspecified') }}
+Network access: {{ network_access | default('wired') }}
+Planned segment: {{ planned_network_segment | default(planned_vlan | default('unspecified')) }}
+Ethernet HAT: {{ has_usb_ethernet_hat | default(false) }}
+
+Baseline packages:
+{% for package in raspi_packages %}
+- {{ package }}
+{% endfor %}

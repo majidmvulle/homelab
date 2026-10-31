@@ -1,0 +1,49 @@
+node_id={{ repmgr_node_id_map[inventory_hostname] }}
+node_name='{{ inventory_hostname }}'
+conninfo='host={{ inventory_hostname }} user={{ repmgr_user }} dbname={{ repmgr_db }} password={{ repmgr_password }} connect_timeout=2'
+data_directory='{{ pg_data_dir }}'
+
+pg_bindir='{{ pg_bin_dir }}'
+
+log_level=INFO
+log_facility=STDERR # Or SYSLOG
+
+# Failover and monitoring
+failover=automatic
+promote_command='{{ pg_bin_dir }}/repmgr standby promote -f {{ repmgr_config_file }} --log-to-file'
+follow_command='{{ pg_bin_dir }}/repmgr standby follow -f {{ repmgr_config_file }} --log-to-file --upstream-node-id=%n'
+
+# Service control commands (adjust for your system if not using systemd for PG directly)
+# These are important for repmgrd to manage PostgreSQL service during failover/switchover.
+# Ensure the postgres user (or repmgr user if configured with sudo) can execute these.
+# This assumes systemd unit `postgresql@{{ pg_version }}-main.service`
+service_start_command   = 'sudo systemctl start postgresql@{{ pg_version }}-main.service'
+service_stop_command    = 'sudo systemctl stop postgresql@{{ pg_version }}-main.service'
+service_restart_command = 'sudo systemctl restart postgresql@{{ pg_version }}-main.service'
+service_reload_command  = 'sudo systemctl reload postgresql@{{ pg_version }}-main.service'
+
+# For repmgrd
+monitoring_history=yes
+monitor_interval_secs=5 # How often repmgrd checks primary/standby status
+
+# Standby clone settings
+# copy_external_config_files: # Handled in clone command for simplicity here
+#   - pg_hba
+#   - postgresql
+
+# Witness server (optional, not configured here)
+# witness_server = ''
+# witness_conninfo = ''
+
+# Replication slots (repmgr can manage these)
+# use_replication_slots=yes # Recommended for production
+
+# Connection timeouts
+#connect_timeout=5
+# reconnect_attempts=3
+# reconnect_interval=10
+
+# Logging for repmgrd
+# log_file = '/var/log/repmgr/repmgrd.log' # Ensure directory exists and has correct permissions
+
+ssh_options='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -q'

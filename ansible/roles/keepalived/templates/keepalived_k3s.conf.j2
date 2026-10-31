@@ -1,0 +1,33 @@
+vrrp_script chk_k3s_api {
+    script "/usr/local/bin/check_k3s_api.sh"
+    interval 2
+    timeout 2
+    fall 2
+    rise 2
+    # Reduce priority when local API health fails so VIP moves to a healthy node.
+    weight -20
+}
+
+vrrp_instance VI_K3S_API {
+    state {% if inventory_hostname == groups['k3s_masters_hp'][0] %}MASTER{% else %}BACKUP{% endif %}
+
+    interface {{ keepalived_interface }}
+
+    virtual_router_id {{ keepalived_vrid }}
+
+    # Make backup priorities deterministic to avoid ties in multi-backup clusters.
+    priority {% if inventory_hostname == groups['k3s_masters_hp'][0] %}{{ keepalived_priority_master }}{% else %}{{ keepalived_priority_backup - (groups['k3s_masters_hp'].index(inventory_hostname) - 1) }}{% endif %}
+
+    advert_int 1
+
+    authentication {
+        auth_type PASS
+        auth_pass {{ keepalived_auth_pass }}
+    }
+    virtual_ipaddress {
+        {{ keepalived_vip }}/24 dev {{ keepalived_interface }} # Assuming /24 subnet for the VIP
+    }
+    track_script {
+      chk_k3s_api
+    }
+}

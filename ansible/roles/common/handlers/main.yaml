@@ -1,0 +1,20 @@
+- name: Format standby data partition
+  ansible.builtin.filesystem:
+    fstype: ext4
+    dev: /dev/nvme0n1p1
+  when: inventory_hostname != "mini01.homelab.internal"
+
+- name: Reload systemd and restart hwmon timer
+  ansible.builtin.systemd:
+    daemon_reload: yes
+    name: hwmon_exporter.timer
+    state: restarted
+
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: yes
+
+- name: Apply k8s fsnotify sysctl settings
+  become: true
+  ansible.builtin.command: sysctl -p /etc/sysctl.d/99-k8s-fsnotify.conf
+  changed_when: true

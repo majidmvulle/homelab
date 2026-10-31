@@ -1,0 +1,58 @@
+# PostgreSQL Client Authentication Configuration File
+# ===================================================
+
+# TYPE  DATABASE        USER            ADDRESS                 METHOD
+
+# "local" is for Unix domain socket connections only
+local   all             all                                     peer
+# IPv4 local connections:
+host    all             all             127.0.0.1/32            scram-sha-256
+# IPv6 local connections:
+host    all             all             ::1/128                 scram-sha-256
+
+# Repmgr user access from all repmgr nodes (primary and standbys)
+# The repmgr user needs to connect to the repmgr_db and also for replication purposes.
+{% for host_item in groups['postgres_all'] %}
+host    {{ repmgr_db }}   {{ repmgr_user }}  {{ hostvars[host_item]['node_ip'] }}/32   scram-sha-256
+{% endfor %}
+
+{% for host_item in groups['postgres_all'] %}
+host    replication     {{ repmgr_user }}  {{ hostvars[host_item]['node_ip'] }}/32   scram-sha-256
+{% endfor %}
+
+# Allow replication connections from other PostgreSQL servers in the cluster (postgres OS user)
+# This allows the 'postgres' user on one server to connect as a replication client to another.
+{% for host_item in groups['postgres_all'] %}
+host    replication     {{ pg_user }}     {{ hostvars[host_item]['node_ip'] }}/32   scram-sha-256
+{% endfor %}
+
+# Example: Allow connections from your application network if needed
+# Make this more specific if possible (e.g., your K3s pod network or specific app server IPs)
+# host    all             all             10.0.0.0/8              scram-sha-256
+# host    all             all             10.42.0.0/16            scram-sha-256 # K3s default pod CIDR
+# host    all             all             10.43.0.0/16            scram-sha-256 # K3s default service CIDR
+
+# mbpro01.homelab.internal
+host    all             all             10.0.0.100/32           scram-sha-256
+
+# mbpro02.homelab.internal
+host    all             all             10.0.0.101/32           scram-sha-256
+
+# mini01.homelab.internal
+host    all             all             10.0.0.120/32           scram-sha-256
+
+# mini02.homelab.internal
+host    all             all             10.0.0.130/32           scram-sha-256
+
+# mini03.homelab.internal
+host    all             all             10.0.0.140/32           scram-sha-256
+
+# rpi01.homelab.internal
+host    all             all             10.0.0.150/32           scram-sha-256
+
+# rpi02.homelab.internal
+host    all             all             10.0.0.160/32           scram-sha-256
+
+# kubernetes
+host    all             all             10.42.0.0/16            scram-sha-256
+host    all             all             10.43.0.0/16            scram-sha-256

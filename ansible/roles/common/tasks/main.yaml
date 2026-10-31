@@ -1,0 +1,195 @@
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: yes
+    cache_valid_time: 3600
+  tags: [common, packages]
+
+- name: Install common packages
+  ansible.builtin.apt:
+    name:
+      - bash-completion
+      - htop
+      - rsync
+      - lm-sensors
+      - fdisk
+      - util-linux # Ensures fdisk and other utilities like sfdisk are present
+      - jq
+      - python3-pip
+      - open-iscsi
+      - cryptsetup
+      - nfs-common
+      - intel-media-va-driver
+      - vainfo
+      - intel-gpu-tools
+      - ethtool
+    state: present
+  tags: [common, packages]
+
+- name: Manage flat-LAN resolver configuration for HP nodes
+  become: true
+  ansible.builtin.copy:
+    dest: /etc/resolv.conf
+    mode: '0644'
+    content: |
+      domain {{ homelab_domain }}
+      search {{ homelab_domain }}
+      {% for nameserver in legacy_flat_lan_dns_servers %}
+      nameserver {{ nameserver }}
+      {% endfor %}
+  when: inventory_hostname in groups.get('hp_nodes', [])
+  tags: [common, dns]
+
+- name: Ensure /data directory exists
+  ansible.builtin.file:
+    path: /data
+    state: directory
+    mode: '0755'
+  tags: [common, storage]
+
+- name: Configure kernel fsnotify sysctl limits for Kubernetes workloads
+  become: true
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/99-k8s-fsnotify.conf
+    mode: '0644'
+    content: |
+      # Managed by Ansible (homelab-infra): fsnotify capacity for Kubernetes nodes
+      {% for key, value in k8s_fsnotify_limits.items() %}
+      {{ key }}={{ value }}
+      {% endfor %}
+  notify: Apply k8s fsnotify sysctl settings
+  when: inventory_hostname in groups.get('hp_nodes', [])
+  tags: [common, tuning]
+
+- name: Configure nofile limits for interactive and service users
+  become: true
+  ansible.builtin.copy:
+    dest: /etc/security/limits.d/99-k8s-nofile.conf
+    mode: '0644'
+    content: |
+      # Managed by Ansible (homelab-infra): increase file descriptor limits
+      * soft nofile {{ k8s_nofile_soft_limit }}
+      * hard nofile {{ k8s_nofile_hard_limit }}
+      root soft nofile {{ k8s_nofile_soft_limit }}
+      root hard nofile {{ k8s_nofile_hard_limit }}
+  when: inventory_hostname in groups.get('hp_nodes', [])
+  tags: [common, tuning]
+
+- name: Manage /data mount for mini01 (already formatted and mounted)
+  ansible.builtin.mount:
+    path: /data
+    src: /dev/nvme0n1p1
+    fstype: ext4
+    state: mounted
+  when: inventory_hostname == "mini01.homelab.internal"
+  tags: [common, storage]
+
+- name: Create partition on 1TB NVMe using fdisk if not present (standbys)
+  ansible.builtin.command: >
+    sh -c "(echo g; echo n; echo 1; echo; echo; echo w) | fdisk /dev/nvme0n1"
+  args:
+    creates: /dev/nvme0n1p1
+  when: inventory_hostname != "mini01.homelab.internal"
+  changed_when: true
+  notify: Format standby data partition
+  tags: [common, storage, partitioning]
+
+- name: Flush handlers to ensure formatting is done before mounting
+  ansible.builtin.meta: flush_handlers
+  when: inventory_hostname != "mini01.homelab.internal" # Only needed for standbys
+  tags: [common, storage]
+
+- name: Mount /data on standbys
+  ansible.builtin.mount:
+    path: /data
+    src: /dev/nvme0n1p1
+    fstype: ext4
+    state: mounted
+  when: inventory_hostname != "mini01.homelab.internal"
+  tags: [common, storage]
+
+- name: Run sensors-detect to generate config if needed
+  ansible.builtin.command: /usr/sbin/sensors-detect --auto
+  args:
+    creates: /etc/sensors3.conf
+  changed_when: false
+  tags: [common, monitoring]
+
+- name: Create node_exporter textfile directory
+  ansible.builtin.file:
+    path: "{{ node_exporter_textfile_dir }}"
+    state: directory
+    mode: '0755'
+  tags: [common, monitoring]
+
+- name: Copy hwmon metrics exporter script
+  ansible.builtin.copy:
+    src: export_hwmon_metrics.sh
+    dest: "{{ hwmon_export_script_path }}"
+    mode: '0755'
+  tags: [common, monitoring]
+
+- name: Template hwmon exporter systemd service unit
+  ansible.builtin.template:
+    src: hwmon_exporter.service.j2
+    dest: /etc/systemd/system/hwmon_exporter.service
+    mode: '0644'
+  notify: Reload systemd and restart hwmon timer
+  tags: [common, monitoring]
+
+- name: Template hwmon exporter systemd timer unit
+  ansible.builtin.template:
+    src: hwmon_exporter.timer.j2
+    dest: /etc/systemd/system/hwmon_exporter.timer
+    mode: '0644'
+  notify: Reload systemd and restart hwmon timer
+  tags: [common, monitoring]
+
+- name: Enable and start hwmon exporter timer
+  ansible.builtin.systemd:
+    name: hwmon_exporter.timer
+    enabled: yes
+    state: started
+    daemon_reload: yes
+  tags: [common, monitoring]
+
+- name: Ensure iscsi_tcp kernel module is loaded
+  community.general.modprobe:
+    name: iscsi_tcp
+    state: present
+  tags: [longhorn, kernel_module]
+
+- name: Ensure iscsi_tcp is loaded on boot
+  ansible.builtin.lineinfile:
+    path: /etc/modules-load.d/iscsi_tcp.conf
+    line: "iscsi_tcp"
+    create: yes
+    mode: '0644'
+  tags: [longhorn, kernel_module]
+
+# --- Wake-on-LAN Setup ---
+- name: Template Wake-on-LAN systemd service unit
+  ansible.builtin.template:
+    src: wol.service.j2
+    dest: /etc/systemd/system/wol.service
+    mode: '0644'
+  notify: Reload systemd
+  tags: [common, wol]
+
+- name: Enable and start Wake-on-LAN service
+  ansible.builtin.systemd:
+    name: wol.service
+    enabled: yes
+    state: started
+    daemon_reload: yes # Ensures systemd is reloaded if the unit file changed
+  tags: [common, wol]
+
+- name: Ensure Local PV directories exist for CNPG
+  ansible.builtin.file:
+    path: "/data/k8s-local-storage/postgres-main-{{ item }}"
+    state: directory
+    mode: '0700'
+    owner: "26"
+    group: "26"
+  loop: "{{ cnpg_local_pv_ids | default([]) }}"
+  when: cnpg_local_pv_ids is defined
+  tags: [common, storage, cnpg]

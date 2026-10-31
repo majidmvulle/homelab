@@ -1,0 +1,112 @@
+{{- $apiGroup := .Values.apiGroup | default "postgresql.cnpg.io" -}}
+apiVersion: {{ $apiGroup }}/v1
+kind: Cluster
+metadata:
+  name: {{ include "postgres-cluster.fullname" . }}
+  labels:
+    {{- include "postgres-cluster.labels" . | nindent 4 }}
+spec:
+  instances: {{ .Values.instances }}
+
+  imageName: {{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}
+
+  {{- if .Values.image.pullSecret }}
+  imagePullSecrets:
+    - name: {{ .Values.image.pullSecret }}
+  {{- end }}
+
+  storage:
+    storageClass: {{ .Values.storage.storageClass }}
+    size: {{ .Values.storage.size }}
+
+  postgresql:
+     {{- if .Values.postgresql.shared_preload_libraries }}
+    shared_preload_libraries:
+       {{- toYaml .Values.postgresql.shared_preload_libraries | nindent 6 }}
+     {{- end }}
+    parameters:
+      {{- toYaml .Values.postgresql.parameters | nindent 6 }}
+
+  bootstrap:
+    initdb:
+      database: {{ .Values.bootstrap.database }}
+      owner: {{ .Values.bootstrap.owner }}
+      {{- if .Values.bootstrap.postInitTemplateSQL }}
+      postInitTemplateSQL:
+        {{- toYaml .Values.bootstrap.postInitTemplateSQL | nindent 8 }}
+      {{- end }}
+
+  monitoring:
+    enablePodMonitor: {{ .Values.monitoring.enablePodMonitor }}
+
+  {{- if .Values.managedRoles }}
+  managed:
+    roles:
+    {{- range .Values.managedRoles }}
+      - name: {{ .roleName }}
+        ensure: present
+        login: true
+        {{- if .connectionLimit }}
+        connectionLimit: {{ .connectionLimit }}
+        {{- else }}
+        connectionLimit: -1
+        {{- end }}
+        {{- if hasKey . "inherit" }}
+        inherit: {{ .inherit }}
+        {{- else }}
+        inherit: true
+        {{- end }}
+        passwordSecret:
+          name: {{ .name }}-password
+        {{- if .inRoles }}
+        inRoles:
+        {{- range .inRoles }}
+          - {{ . }}
+        {{- end }}
+        {{- end }}
+    {{- end }}
+  {{- end }}
+
+  {{- if .Values.backup.enabled }}
+  backup:
+    retentionPolicy: {{ .Values.backup.retentionPolicy }}
+    barmanObjectStore:
+      {{- toYaml .Values.backup.barmanObjectStore | nindent 6 }}
+  {{- end }}
+
+---
+# PgBouncer Read-Write Pooler (primary)
+{{- if .Values.pooler.enabled }}
+apiVersion: {{ $apiGroup }}/v1
+kind: Pooler
+metadata:
+  name: {{ include "postgres-cluster.fullname" . }}-pooler-rw
+  labels:
+    {{- include "postgres-cluster.labels" . | nindent 4 }}
+spec:
+  cluster:
+    name: {{ include "postgres-cluster.fullname" . }}
+  instances: {{ .Values.pooler.instances }}
+  type: rw
+  pgbouncer:
+    poolMode: {{ .Values.pooler.poolMode }}
+    parameters:
+      {{- toYaml .Values.pooler.parameters | nindent 6 }}
+---
+# PgBouncer Read-Only Pooler (replicas)
+apiVersion: {{ $apiGroup }}/v1
+kind: Pooler
+metadata:
+  name: {{ include "postgres-cluster.fullname" . }}-pooler-ro
+  labels:
+    {{- include "postgres-cluster.labels" . | nindent 4 }}
+spec:
+  cluster:
+    name: {{ include "postgres-cluster.fullname" . }}
+  instances: {{ .Values.pooler.instances }}
+  type: ro
+  pgbouncer:
+    poolMode: {{ .Values.pooler.poolMode }}
+    parameters:
+      {{- toYaml .Values.pooler.parameters | nindent 6 }}
+{{- end }}

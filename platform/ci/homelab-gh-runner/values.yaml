@@ -1,0 +1,105 @@
+## GitHub organization URL where runners will be registered.
+githubConfigUrl: "https://github.com/your-org"
+
+## Name of the Kubernetes secret in the 'ci' namespace containing GitHub authentication credentials
+githubConfigSecret: homelab-gh-runner-secret
+
+## Controller service account details for role binding within the 'ci' namespace
+controllerServiceAccount:
+  namespace: ci
+  name: gh-arc-controller-gha-rs-controller
+
+## Autoscaling runner pool limits. Each runner requests ~0.6 CPU and 2Gi, so 8 fit in the cluster's spare
+## requests alongside the other workloads.
+minRunners: 0
+maxRunners: 8
+
+## Name of the runner scale set (used in GitHub Actions workflows as `runs-on: homelab-gh-runner`)
+runnerScaleSetName: "homelab-gh-runner"
+
+## Custom runner pod template with DinD and custom runner image
+template:
+  spec:
+    imagePullSecrets:
+      - name: ghcr-image-pull-secret
+    # Spread runners across nodes so one node is not saturated while others idle.
+    topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        labelSelector:
+          matchLabels:
+            actions.github.com/scale-set-name: homelab-gh-runner
+    initContainers:
+      - name: init-dind-externals
+        image: ghcr.io/your-org/actions-runner:2.336.0
+        command: ["cp"]
+        args: ["-r", "/home/runner/externals/.", "/home/runner/tmpDir/"]
+        volumeMounts:
+          - name: dind-externals
+            mountPath: /home/runner/tmpDir
+      - name: dind
+        image: docker:dind
+        args:
+          - dockerd
+          - --host=unix:///var/run/docker.sock
+          - --group=$(DOCKER_GROUP_GID)
+        env:
+          - name: DOCKER_GROUP_GID
+            value: "123"
+        securityContext:
+          privileged: true
+        resources:
+          requests:
+            cpu: 100m
+            memory: 512Mi
+          limits:
+            cpu: "2"
+            memory: 4Gi
+        restartPolicy: Always
+        startupProbe:
+          exec:
+            command:
+              - docker
+              - info
+          initialDelaySeconds: 3
+          failureThreshold: 30
+          periodSeconds: 5
+          timeoutSeconds: 10
+        volumeMounts:
+          - name: work
+            mountPath: /home/runner/_work
+          - name: dind-sock
+            mountPath: /var/run
+          - name: dind-externals
+            mountPath: /home/runner/externals
+    containers:
+      - name: runner
+        image: ghcr.io/your-org/actions-runner:2.336.0
+        command: ["/home/runner/run.sh"]
+        env:
+          - name: DOCKER_HOST
+            value: unix:///var/run/docker.sock
+          - name: RUNNER_WAIT_FOR_DOCKER_IN_SECONDS
+            value: "120"
+        # Requests let the scheduler place runners by load; the CPU limit stops one heavy job (for example
+        # test coverage) from taking a whole node.
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1536Mi
+          limits:
+            cpu: "3"
+            memory: 6Gi
+        volumeMounts:
+          - name: work
+            mountPath: /home/runner/_work
+          - name: dind-sock
+            mountPath: /var/run
+    volumes:
+      - name: dind-sock
+        emptyDir: {}
+      - name: dind-externals
+        emptyDir: {}
+      - name: work
+        emptyDir: {}

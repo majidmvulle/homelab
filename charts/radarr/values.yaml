@@ -1,0 +1,86 @@
+image:
+  repository: linuxserver/radarr
+  tag: ""
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+deploymentStrategy: {}
+fullnameOverride: "radarr"
+nameOverride: ""
+
+radarr:
+  port: 7878
+
+env:
+  TZ: "Asia/Dubai"
+  PUID: "1000"
+  PGID: "1000"
+
+service:
+  type: ClusterIP
+  port: 7878
+
+ingress:
+  enabled: false
+  ingressClassName: traefik
+  host: radarr.homelab.internal
+  annotations: {}
+  tls:
+    enabled: true
+
+persistence:
+  config:
+    storageClass: "longhorn-persistent"
+    accessMode: ReadWriteOnce
+    size: 5Gi
+    mountPath: /config
+    annotations:
+      helm.sh/resource-policy: keep
+      argocd.argoproj.io/sync-options: Prune=false
+
+  media:
+    accessMode: ReadWriteMany
+    size: 100Gi
+    # Change the settings in the UI to put downloads in this directory
+    # Tools > Options > Downloads > Default Save Path: /data/downloads/qbittorrent
+    # Also check, and set the value "Keep incomplete torrents in: /data/downloads/qbittorrent/temp"
+    # Click "Save" at the bottom
+    mountPath: /data/media
+    annotations:
+      # Prevent Helm uninstall from deleting this PVC
+      helm.sh/resource-policy: keep
+      # Prevent Argo CD from pruning/deleting this PVC
+      argocd.argoproj.io/sync-options: Prune=false
+    nfs:
+      path: /volume1/k3s/data/videos/movies
+      server: synology01.homelab.internal
+      readOnly: false
+
+  downloads:
+    accessMode: ReadWriteMany
+    size: 50Gi
+    mountPath: /data/downloads
+    annotations:
+      # Prevent Helm uninstall from deleting this PVC
+      helm.sh/resource-policy: keep
+      # Prevent Argo CD from pruning/deleting this PVC
+      argocd.argoproj.io/sync-options: Prune=false
+    nfs:
+      path: /volume1/k3s/data/downloads
+      server: synology01.homelab.internal
+      readOnly: false
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 400m
+    memory: 512Mi
+
+securityContext: # Container-level security context
+  runAsUser: 1000
+  runAsGroup: 1000
+
+podSecurityContext: # Pod-level security context
+  fsGroup: 1000

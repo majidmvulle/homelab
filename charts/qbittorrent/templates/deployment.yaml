@@ -1,0 +1,125 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "qbittorrent.fullname" . }}
+  labels:
+    {{- include "qbittorrent.labels" . | nindent 4 }}
+spec:
+  replicas: {{.Values.replicaCount}}
+  {{- with .Values.deploymentStrategy }}
+  strategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "qbittorrent.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "qbittorrent.selectorLabels" . | nindent 8 }}
+    spec:
+      initContainers:
+        - name: init-run
+          image: "{{ .Values.initImage.repository }}:{{ .Values.initImage.tag }}"
+          imagePullPolicy: {{ .Values.initImage.pullPolicy }}
+          command:
+            - sh
+            - -c
+            - |
+              mkdir -p /run/qbittorrent && \
+              chown {{ .Values.env.PUID }}:{{ .Values.env.PGID }} /run/qbittorrent
+          volumeMounts:
+            - name: run
+              mountPath: /run/qbittorrent
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.targetPort }}
+              protocol: TCP
+          env:
+            - name: PUID
+              value: "{{ .Values.env.PUID }}"
+            - name: PGID
+              value: "{{ .Values.env.PGID }}"
+            - name: TZ
+              value: "{{ .Values.env.TZ }}"
+            - name: UMASK
+              value: "{{ .Values.env.UMASK }}"
+            - name: WEBUI_PORTS
+              value: "{{ .Values.env.WEBUI_PORTS }}"
+            {{- if .Values.wireguard.enabled }}
+            - name: VPN_ENABLED
+              value: "true"
+            - name: VPN_CONF
+              value: "{{ .Values.wireguard.configFileName }}"
+            - name: VPN_PROVIDER
+              value: "{{ .Values.wireguard.vpnProvider }}"
+            - name: VPN_LAN_NETWORK
+              value: "{{.Values.wireguard.vpnLanNetwork}}"
+            - name: VPN_LAN_LEAK_ENABLED
+              value: "{{ .Values.wireguard.vpnLanLeakEnabled }}"
+            - name: VPN_EXPOSE_PORTS_ON_LAN
+              value: "{{ .Values.wireguard.vpnExposePortsOnLan }}"
+            - name: VPN_AUTO_PORT_FORWARD
+              value: "{{ .Values.wireguard.vpnAutoPortForward }}"
+            - name: VPN_AUTO_PORT_FORWARD_TO_PORTS
+              value: "{{ .Values.wireguard.vpnAutoPortForwardToPorts }}"
+            - name: VPN_KEEP_LOCAL_DNS
+              value: "{{ .Values.wireguard.vpnKeepLocalDns }}"
+            - name: VPN_FIREWALL_TYPE
+              value: "{{ .Values.wireguard.vpnFirewallType }}"
+            - name: VPN_HEALTHCHECK_ENABLED
+              value: "{{ .Values.wireguard.vpnHealthcheckEnabled }}"
+            - name: PRIVOXY_ENABLED
+              value: "{{.Values.wireguard.privoxyEnabled}}"
+            - name: UNBOUND_ENABLED
+              value: "{{ .Values.wireguard.unboundEnabled }}"
+            - name: VPN_NAMESERVERS
+              value: "{{ .Values.wireguard.vpnNameServers }}"
+
+            {{- end }}
+          volumeMounts:
+            - name: config
+              mountPath: {{ .Values.persistence.config.mountPath }}
+            - name: downloads
+              mountPath: {{ .Values.persistence.downloads.mountPath }}
+            {{- if .Values.wireguard.enabled }}
+            - name: wireguard-config
+              mountPath: /config/wireguard
+            {{- end }}
+            - name: run # Mount the shared /run
+              mountPath: /run
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            capabilities:
+              add:
+                - NET_ADMIN
+      volumes:
+        - name: config
+          persistentVolumeClaim:
+            claimName: {{ include "qbittorrent.fullname" . }}-config
+        - name: downloads
+          persistentVolumeClaim:
+            claimName: {{ include "qbittorrent.fullname" . }}-downloads-nfs
+
+        {{- if .Values.wireguard.enabled }}
+        - name: wireguard-config
+          {{- if .Values.wireguard.cleanupStaleLanRoute }}
+          projected:
+            defaultMode: 0755
+            sources:
+              - secret:
+                  name: {{ .Values.wireguard.configMapName }}
+              - configMap:
+                  name: {{ include "qbittorrent.fullname" . }}-wireguard-hooks
+          {{- else }}
+          secret:
+            secretName: {{ .Values.wireguard.configMapName }}
+          {{- end }}
+        {{- end }}
+        - name: run  # Create an emptyDir for /run
+          emptyDir: {}

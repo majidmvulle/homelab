@@ -1,0 +1,16 @@
+{{- if .Values.databases }}
+{{- range .Values.databases }}
+---
+apiVersion: {{ $.Values.apiGroup }}/v1
+kind: Database
+metadata:
+  name: {{ .name }}
+  namespace: {{ $.Release.Namespace }}
+spec:
+  name: {{ .dbName }}
+  owner: {{ .owner }}
+  cluster:
+    name: {{ $.Values.fullnameOverride }}
+  ensure: present
+{{- end }}
+{{- end }}

@@ -1,0 +1,7 @@
+apiVersion: v2
+name: sonarr
+description: A Helm chart for Sonarr (linuxserver.io image)
+type: application
+version: 0.1.1
+appVersion: "4.0.15"
+dependencies: []

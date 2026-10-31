@@ -1,0 +1,149 @@
+temporal:
+  server:
+    enabled: true
+    image:
+      repository: temporalio/server
+      tag: 1.32.1
+      pullPolicy: IfNotPresent
+    # Temporal 1.30+ uses an embedded configuration unless an explicit path is
+    # supplied. The sprig template is the chart's supported template for these
+    # server versions and preserves the PostgreSQL persistence configuration.
+    setConfigFilePath: true
+    configMapsToMount: sprig
+    # Global default settings (can be overridden per service)
+    replicaCount: 1
+    config:
+      logLevel: "debug,info"
+      persistence:
+        default:
+          driver: "sql"
+          sql:
+            driver: "postgres12"
+            host: postgres-main-pooler-rw.database.svc.cluster.local
+            port: 5432
+            database: temporal
+            user: temporal_user
+            # for a production deployment use this instead of `password` and provision the secret beforehand e.g. with a sealed secret
+            # it has a single key called `password`
+            existingSecret: temporal-password
+            maxConns: 20
+            maxConnLifetime: "1h"
+            tls:
+              enabled: false
+              enableHostVerification: false
+            #  serverName: _HOST_ # this is strictly required when using serverless CRDB offerings
+            #  caFile: /path/to/certs/<CA-file> # Here we assumed that caFile, certFile, keyFile are stored in one secret mounted as 'secret-with-certs' (see: server.additionalVolumes and server.additionalVolumeMounts sections).
+            #  certFile: /path/to/certs/<client-cert-file>
+            #  keyFile: /path/to/certs/<client-key-file>
+
+        visibility:
+          driver: "sql"
+          sql:
+            driver: "postgres12"
+            host: postgres-main-pooler-rw.database.svc.cluster.local
+            port: 5432
+            database: temporal_visibility
+            user: temporal_user
+            # for a production deployment use this instead of `password` and provision the secret beforehand e.g. with a sealed secret
+            # it has a single key called `password`
+            existingSecret: temporal-password
+            maxConns: 20
+            maxConnLifetime: "1h"
+            tls:
+              enabled: false
+              enableHostVerification: false
+            #  serverName: _HOST_ # this is strictly required when using serverless CRDB offerings
+            #  caFile: /path/to/certs/<CA-file> # Here we assumed that caFile, certFile, keyFile are stored in one secret mounted as 'secret-with-certs' (see: server.additionalVolumes and server.additionalVolumeMounts sections).
+            #  certFile: /path/to/certs/<client-cert-file>
+            #  keyFile: /path/to/certs/<client-key-file>
+
+    frontend:
+      resources:
+        requests:
+          cpu: 100m
+          memory: 512Mi
+        limits:
+          cpu: 300m
+          memory: 768Mi
+    history:
+      resources:
+        requests:
+          cpu: 250m
+          memory: 768Mi
+        limits:
+          cpu: 450m
+          memory: 1Gi
+    matching:
+      resources:
+        requests:
+          cpu: 150m
+          memory: 512Mi
+        limits:
+          cpu: 400m
+          memory: 768Mi
+    worker:
+      resources:
+        requests:
+          cpu: 150m
+          memory: 512Mi
+        limits:
+          cpu: 400m
+          memory: 768Mi
+
+  web:
+    enabled: true
+    replicaCount: 1
+    image:
+      repository: temporalio/ui
+      tag: 2.57.0
+      pullPolicy: IfNotPresent
+    service:
+      type: ClusterIP
+      port: 80
+    ingress:
+      enabled: true
+      className: traefik
+      hosts:
+        - temporal.homelab.internal
+      path: /
+      pathType: Prefix
+      tls:
+        - hosts:
+            - temporal.homelab.internal
+      annotations:
+        external-dns.alpha.kubernetes.io/hostname: temporal.homelab.internal
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 300m
+        memory: 512Mi
+
+  schema:
+    createDatabase:
+      enabled: false
+    # The upstream 0.74 chart names this Job using Helm's release revision.
+    # Argo CD always renders that as `temporal-schema-1`, so Kubernetes rejects
+    # later schema-image changes because a Job pod template is immutable. The
+    # Argo PreSync Job in templates/ performs the versioned migrations instead.
+    setup:
+      enabled: false
+      backoffLimit: 100
+    update:
+      enabled: false
+      backoffLimit: 100
+
+  # Disable components you don't use if they were enabled by default
+  elasticsearch:
+    enabled: false
+  prometheus:
+    enabled: false
+  grafana:
+    enabled: false
+  cassandra:
+    enabled: false
+  mysql:
+    enabled: false
+  admintools:
+    enabled: false

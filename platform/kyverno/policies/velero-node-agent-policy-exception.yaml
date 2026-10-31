@@ -1,0 +1,38 @@
+apiVersion: kyverno.io/v2
+kind: PolicyException
+metadata:
+  name: velero-node-agent-policy-exception
+  namespace: storage
+spec:
+  match:
+    any:
+      - resources:
+          kinds:
+            - Pod
+          namespaces:
+            - storage
+          selector:
+            matchLabels:
+              name: node-agent
+  exceptions:
+    - policyName: disallow-host-path
+      ruleNames:
+        - host-path
+    - policyName: disallow-capabilities-strict
+      ruleNames:
+        - require-drop-all
+    - policyName: disallow-privilege-escalation
+      ruleNames:
+        - privilege-escalation
+    - policyName: require-run-as-non-root-user
+      ruleNames:
+        - run-as-non-root-user
+    - policyName: require-run-as-nonroot
+      ruleNames:
+        - run-as-non-root
+    - policyName: restrict-seccomp-strict
+      ruleNames:
+        - check-seccomp-strict
+    - policyName: restrict-volume-types
+      ruleNames:
+        - restricted-volumes

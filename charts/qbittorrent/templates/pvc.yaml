@@ -1,0 +1,38 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "qbittorrent.fullname" . }}-config
+  labels:
+    {{- include "qbittorrent.labels" . | nindent 4 }}
+  {{- with .Values.persistence.config.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  accessModes:
+    - {{ .Values.persistence.config.accessMode }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.config.size }}
+  storageClassName: {{ .Values.persistence.config.storageClass }}
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "qbittorrent.fullname" . }}-downloads-nfs
+  labels:
+    {{- include "qbittorrent.labels" . | nindent 4 }}
+    volume-type: nfs
+  {{- with .Values.persistence.downloads.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  accessModes:
+    - {{ .Values.persistence.downloads.accessMode }}
+  resources:
+    requests:
+      storage: {{ .Values.persistence.downloads.size }}
+  storageClassName: ""
+  volumeName: {{ include "qbittorrent.fullname" . }}-downloads-nfs

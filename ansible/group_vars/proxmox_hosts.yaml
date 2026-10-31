@@ -1,0 +1,30 @@
+---
+ansible_python_interpreter: /usr/bin/python3
+
+proxmox_cluster_name: homelab-pve
+proxmox_edge_design: dedicated_wan_nic
+proxmox_management_vlan_id: 10
+proxmox_management_subnet: 10.10.10.0/24
+proxmox_management_gateway: 10.10.10.1
+proxmox_lan_bridge_name: vmbr0
+proxmox_lan_physical_nic: enp1s0
+proxmox_wan_bridge_name: vmbr1
+proxmox_wan_physical_nic: eno2
+proxmox_trunk_vlans:
+  - 10
+  - 20
+  - 30
+  - 40
+  - 50
+proxmox_flat_wifi_vlan_id: 40
+proxmox_flat_wifi_ap_mode: access
+proxmox_opnsense_vm:
+  name: opnsense01
+  vmid: 100
+  cpu_cores: 4
+  memory_mb: 8192
+  system_disk_gb: 64
+  lan_trunk_bridge: vmbr0
+  wan_bridge: vmbr1
+  onboot: true
+  startup_order: 1

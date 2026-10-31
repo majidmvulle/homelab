@@ -1,0 +1,25 @@
+{{- if .Values.lanAccess.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ default (printf "%s-lan" (include "postgres-cluster.fullname" .)) .Values.lanAccess.name }}
+  labels:
+    {{- include "postgres-cluster.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres-lan-access
+  {{- with .Values.lanAccess.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.lanAccess.type }}
+  {{- if .Values.lanAccess.loadBalancerIP }}
+  loadBalancerIP: {{ .Values.lanAccess.loadBalancerIP }}
+  {{- end }}
+  ports:
+    - name: postgres
+      port: {{ .Values.lanAccess.port }}
+      protocol: TCP
+      targetPort: {{ .Values.lanAccess.targetPort }}
+  selector:
+    cnpg.io/poolerName: {{ default (printf "%s-pooler-rw" (include "postgres-cluster.fullname" .)) .Values.lanAccess.poolerName }}
+{{- end }}

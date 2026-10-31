@@ -1,0 +1,5 @@
+flags:
+  ## Exclude ArgoCD instance label propagation so ArgoCD does not track dynamic ephemeral runner pods
+  excludeLabelPropagationPrefixes:
+    - "argocd.argoproj.io/instance"
+  logLevel: "info"

@@ -1,0 +1,5 @@
+apiVersion: v2
+name: ca-issuer
+description: Persisted CA secret and ClusterIssuer for cert-manager
+type: application
+version: 1.3.0

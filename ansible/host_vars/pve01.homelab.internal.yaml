@@ -1,0 +1,10 @@
+---
+device_platform: lenovo-m920q-tiny
+device_cpu: intel-i5-8500t
+device_ram_gb: 16
+device_storage:
+  os: 256GB-nvme
+network_role: proxmox-hypervisor
+planned_vlan: management
+edge_design: dedicated_wan_nic
+pve_management_ip: 10.10.10.10

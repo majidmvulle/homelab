@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "jellyfin.fullname" .}}
+  labels:
+    {{- include "jellyfin.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  {{- with .Values.deploymentStrategy }}
+  strategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "jellyfin.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "jellyfin.selectorLabels" . | nindent 8 }}
+    spec:
+      securityContext:
+{{ toYaml .Values.podSecurityContext | nindent 8 }}
+{{- if .Values.hardwareAcceleration.enabled }}
+        supplementalGroups:
+          - {{ .Values.hardwareAcceleration.renderGid }}
+          - {{ .Values.hardwareAcceleration.videoGid }}
+{{- end }}
+      containers:
+        - name: {{ .Values.containerName | default "jellyfin" }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.jellyfin.port }}
+              name: http
+              protocol: TCP
+          env:
+            - name: TZ
+              value: "{{ .Values.env.TZ }}"
+            - name: PUID
+              value: "{{ .Values.env.PUID }}"
+            - name: PGID
+              value: "{{ .Values.env.PGID }}"
+                  {{- if .Values.env.JELLYFIN_PublishedServerUrl }}
+            - name: JELLYFIN_PublishedServerUrl
+              value: "{{ .Values.env.JELLYFIN_PublishedServerUrl }}"
+                  {{- end }}
+          volumeMounts:
+            - name: config-volume
+              mountPath: {{ .Values.persistence.config.mountPath }}
+            - name: media-volume
+              mountPath: {{ .Values.persistence.media.mountPath }}
+            - name: transcode-volume
+              mountPath: /transcodes
+            {{- if .Values.hardwareAcceleration.enabled }}
+            - name: dri-device
+              mountPath: {{ .Values.hardwareAcceleration.driDevicePath }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+      volumes:
+        - name: config-volume
+          persistentVolumeClaim:
+            claimName: {{ default (printf "%s-config-pvc" (include "jellyfin.fullname" .)) .Values.persistence.config.existingClaim }}
+        - name: media-volume
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.media.existingClaim }}
+        - name: transcode-volume
+          emptyDir: {}
+        {{- if .Values.hardwareAcceleration.enabled }}
+        - name: dri-device
+          hostPath:
+            path: {{ .Values.hardwareAcceleration.driDevicePath }}
+            type: Directory
+        {{- end }}

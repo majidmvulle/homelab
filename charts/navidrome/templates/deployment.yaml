@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "navidrome.fullname" . }}
+  labels:
+    {{- include "navidrome.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  {{- with .Values.deploymentStrategy }}
+  strategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "navidrome.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "navidrome.labels" . | nindent 8 }}
+    spec:
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: navidrome
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.service.targetPort }}
+              name: http
+          env:
+            - name: ND_MUSICFOLDER
+              value: {{.Values.env.ND_MUSICFOLDER | quote}}
+            - name: ND_ENABLETRANSCODINGCONFIG
+              value: {{.Values.env.ND_ENABLETRANSCODINGCONFIG | quote}}
+            - name: ND_SPOTIFY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: navidrome-spotify-secrets
+                  key: spotify-id
+            - name: ND_SPOTIFY_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: navidrome-spotify-secrets
+                  key: spotify-secret
+          volumeMounts:
+            - name: config-volume
+              mountPath: {{ .Values.persistence.config.mountPath }}
+            - name: music-volume
+              mountPath: {{ .Values.persistence.music.mountPath }}
+              readOnly: {{.Values.persistence.music.readOnly}}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+      volumes:
+        - name: config-volume
+          persistentVolumeClaim:
+            claimName: {{ include "navidrome.fullname" . }}-config-pvc
+        - name: music-volume
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.music.existingClaim }}
+            readOnly: {{.Values.persistence.music.readOnly}}

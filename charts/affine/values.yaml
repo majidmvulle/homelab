@@ -1,0 +1,77 @@
+image:
+  repository: ghcr.io/toeverything/affine
+  tag: "0.27.4"
+  pullPolicy: IfNotPresent
+deploymentStrategy: {}
+
+service:
+  type: ClusterIP
+  port: 3010
+
+ingress:
+  enabled: true
+  ingressClassName: traefik
+  host: affine.homelab.internal
+  annotations: {}
+  tls:
+    enabled: true
+
+persistence:
+  enabled: true
+  storageClass: longhorn-persistent
+  accessMode: ReadWriteOnce
+  size: 10Gi
+  configSize: 1Gi
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: 1000m
+    memory: 2Gi
+
+podSecurityContext:
+  runAsUser: 1000
+  runAsGroup: 3000
+  fsGroup: 2000
+  runAsNonRoot: true
+
+securityContext:
+  runAsUser: 1000
+  runAsGroup: 3000
+  runAsNonRoot: true
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+externalSecrets:
+  clusterStore: cluster-k8s-store
+  # Optional mailer keys can live in a separate secret configured below.
+  # admin-email, admin-password, mailer-host, mailer-port,
+  # mailer-user, mailer-password, mailer-sender, mailer-secure
+
+config:
+  flags:
+    allowGuestDemoWorkspace: true
+
+mailer:
+  existingSecretName: affine-secrets
+  caCert:
+    enabled: false
+    secretKey: ca.crt
+    mountPath: /etc/ssl/custom-ca
+    fileName: ca.crt
+
+postgres:
+  host: postgres-main-rw.database.svc.cluster.local
+  port: 5432
+  dbName: affine
+  user: affine_user
+
+redis:
+  host: valkey-haproxy.cache.svc.cluster.local
+  port: 6379
+  dbIndex: 0

@@ -1,0 +1,15 @@
+policy-reporter:
+  ui:
+    enabled: true
+    plugins:
+      kyverno: true
+    ingress:
+      enabled: true
+      hosts:
+        - host: policy-reporter.homelab.internal
+          paths:
+            - path: /
+              pathType: ImplementationSpecific
+      ingressClassName: traefik
+  kyvernoPlugin:
+    enabled: true

@@ -1,0 +1,7 @@
+global_defs {
+    router_id {{ inventory_hostname | replace('.', '_') }}
+    script_user root
+    enable_script_security
+}
+
+include /etc/keepalived/conf.d/*.conf

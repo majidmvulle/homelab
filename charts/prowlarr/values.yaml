@@ -1,0 +1,54 @@
+image:
+  repository: linuxserver/prowlarr
+  tag: ""
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+deploymentStrategy: {}
+fullnameOverride: "prowlarr"
+nameOverride: ""
+
+prowlarr:
+  port: 9696
+
+env:
+  TZ: "Asia/Dubai"
+  PUID: "1000"
+  PGID: "1000"
+
+service:
+  type: ClusterIP
+  port: 9696
+
+ingress:
+  enabled: false
+  ingressClassName: traefik
+  host: prowlarr.homelab.internal
+  annotations: {}
+  tls:
+    enabled: true
+
+persistence:
+  config:
+    storageClass: "longhorn-persistent"
+    accessMode: ReadWriteOnce
+    size: 1Gi
+    mountPath: /config
+    annotations:
+      helm.sh/resource-policy: keep
+      argocd.argoproj.io/sync-options: Prune=false
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 128Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi
+
+securityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+
+podSecurityContext:
+  fsGroup: 1000

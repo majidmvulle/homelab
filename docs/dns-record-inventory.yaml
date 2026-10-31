@@ -1,0 +1,236 @@
+# DNS source-of-truth seed inventory.
+#
+# Purpose:
+# - capture the current authoritative record set for homelab.internal
+# - separate repo-known records from Pi-hole-only records that still need export
+# - provide a concrete target for Unbound host overrides later
+#
+# Rules:
+# - do not change live DNS from this file directly
+# - do not assume values for records marked verify_from_pihole_export
+# - update this file first, then stage Unbound/AdGuard changes from it
+
+metadata:
+  domain: homelab.internal
+  current_dns_backend: opnsense-unbound
+  teleporter_archive: pi-hole_rpi03_teleporter_2026-06-22_14-42-46__04.zip
+  target_dns_stack:
+    frontend: adguard-home
+    local_authority: unbound
+  current_edge_ingress_ip: 10.0.0.18
+  notes:
+    - the seed inventory was reconstructed from the Pi-hole Teleporter export
+    - live client-facing DNS now resolves through OPNsense Unbound
+    - planned dynamic app record updates target OPNsense Bind via RFC2136
+    - records behind Traefik are seeded from Git and should resolve to the current ingress IP
+    - Pi-hole Teleporter export confirmed that local DNS is implemented as A-style hosts entries in pihole.toml
+    - Pi-hole Teleporter export confirmed there are no configured local CNAME records
+    - switch01 and ap01 do not appear in the Teleporter local DNS export and must be verified separately before cutover
+    - for OPNsense Unbound, the documented UI path is host overrides plus aliases, not literal CNAME entries
+
+records:
+  infrastructure:
+    - fqdn: opnsense01.homelab.internal
+      type: A
+      value: 10.0.0.1
+      source: repo_known
+      owner: manual
+    - fqdn: pve01.homelab.internal
+      type: A
+      value: 10.0.0.112
+      source: repo_known
+      owner: manual
+    - fqdn: mini01.homelab.internal
+      type: A
+      value: 10.0.0.120
+      source: repo_known
+      owner: manual
+    - fqdn: mini02.homelab.internal
+      type: A
+      value: 10.0.0.130
+      source: repo_known
+      owner: manual
+    - fqdn: mini03.homelab.internal
+      type: A
+      value: 10.0.0.140
+      source: repo_known
+      owner: manual
+    - fqdn: rpi01.homelab.internal
+      type: A
+      value: 10.0.0.150
+      source: repo_known
+      owner: manual
+    - fqdn: rpi02.homelab.internal
+      type: A
+      value: 10.0.0.160
+      source: repo_known
+      owner: manual
+    - fqdn: rpi03.homelab.internal
+      type: A
+      value: 10.0.0.170
+      source: repo_known
+      owner: manual
+    - fqdn: rpi04.homelab.internal
+      type: A
+      value: 10.0.0.171
+      source: repo_known
+      owner: manual
+    - fqdn: switch01.homelab.internal
+      type: A
+      value: null
+      source: absent_from_pihole_export
+      owner: manual
+    - fqdn: ap01.homelab.internal
+      type: A
+      value: null
+      source: absent_from_pihole_export
+      owner: manual
+    - fqdn: synology01.homelab.internal
+      type: A
+      value: 10.0.0.200
+      source: pihole_export_confirmed
+      owner: manual
+    - fqdn: files.homelab.internal
+      type: alias_to_synology01
+      value: synology01.homelab.internal
+      source: target_design
+      owner: manual
+    - fqdn: photos.homelab.internal
+      type: alias_to_synology01
+      value: synology01.homelab.internal
+      source: target_design
+      owner: manual
+    - fqdn: s3.homelab.internal
+      type: alias_to_synology01
+      value: synology01.homelab.internal
+      source: target_design
+      owner: manual
+
+  cluster_vips:
+    - fqdn: k3s.homelab.internal
+      type: A
+      value: 10.0.0.2
+      source: repo_known
+      owner: manual
+    - fqdn: postgres-writer.homelab.internal
+      type: A
+      value: 10.0.0.3
+      source: repo_known
+      owner: manual
+    - fqdn: postgres-reader.homelab.internal
+      type: A
+      value: 10.0.0.4
+      source: repo_known
+      owner: manual
+
+  ingress_hosts_via_traefik:
+    - fqdn: traefik.homelab.internal
+      type: A
+      value: 10.0.0.18
+      source: repo_seeded
+      owner: external-dns
+    - fqdn: argocd.homelab.internal
+      type: A
+      value: 10.0.0.18
+      source: repo_seeded
+      owner: external-dns
+    - fqdn: grafana.homelab.internal
+      type: A
+      value: 10.0.0.18
+      source: repo_seeded
+      owner: external-dns
+    - fqdn: temporal.homelab.internal
+      type: A
+      value: 10.0.0.18
+      source: repo_seeded
+      owner: external-dns
+    - fqdn: policy-reporter.homelab.internal
+      type: A
+      value: 10.0.0.18
+      source: repo_seeded
+      owner: external-dns
+    - fqdn: haproxy.homelab.internal
+      type: A
+      value: 10.0.0.18
+      source: repo_seeded
+      owner: external-dns
+    - fqdn: minio.homelab.internal
+      type: A
+      value: 10.0.0.18
+      source: repo_seeded
+      owner: external-dns
+    - fqdn: wg.homelab.internal
+      type: retired
+      value: null
+      source: user_directive
+      owner: retire
+    - fqdn: affine.homelab.internal
+      type: A
+      value: 10.0.0.18
+      source: repo_seeded
+      owner: external-dns
+    - fqdn: mailpit.homelab.internal
+      type: A
+      value: 10.0.0.18
+      source: repo_seeded
+      owner: external-dns
+    - fqdn: jellyfin.homelab.internal
+      type: A
+      value: 10.0.0.18
+      source: repo_seeded
+      owner: external-dns
+    - fqdn: navidrome.homelab.internal
+      type: A
+      value: 10.0.0.18
+      source: repo_seeded
+      owner: external-dns
+    - fqdn: lidarr.homelab.internal
+      type: A
+      value: 10.0.0.18
+      source: repo_seeded
+      owner: external-dns
+    - fqdn: radarr.homelab.internal
+      type: A
+      value: 10.0.0.18
+      source: repo_seeded
+      owner: external-dns
+    - fqdn: sonarr.homelab.internal
+      type: A
+      value: 10.0.0.18
+      source: repo_seeded
+      owner: external-dns
+    - fqdn: torrent.homelab.internal
+      type: A
+      value: 10.0.0.18
+      source: repo_seeded
+      owner: external-dns
+    - fqdn: prowlarr.homelab.internal
+      type: A
+      value: 10.0.0.18
+      source: repo_seeded
+      owner: external-dns
+    - fqdn: syncthing.homelab.internal
+      type: A
+      value: 10.0.0.18
+      source: pihole_export_confirmed
+      owner: external-dns
+    - fqdn: jackett.homelab.internal
+      type: retired
+      value: null
+      source: user_directive
+      owner: retire
+      note: present in Pi-hole export but explicitly retired
+
+  review_only:
+    - fqdn: mbpro01.homelab.internal
+      type: A
+      value: null
+      source: repo_reference_only
+      owner: unknown
+      note: appears only in PostgreSQL template comments; do not recreate unless confirmed by Pi-hole export
+    - fqdn: mbpro02.homelab.internal
+      type: A
+      value: null
+      source: repo_reference_only
+      owner: unknown
+      note: appears only in PostgreSQL template comments; do not recreate unless confirmed by Pi-hole export

@@ -1,0 +1,89 @@
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: local-storage
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Retain
+
+---
+# PV for Node 1 (mini01.homelab.internal)
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: local-pv-postgres-main-1
+  labels:
+    type: local
+spec:
+  capacity:
+    storage: 100Gi # Adjust based on your NVMe size
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-storage
+  local:
+    path: /data/k8s-local-storage/postgres-main-1
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - mini01.homelab.internal
+
+---
+# PV for Node 2 (mini02.homelab.internal)
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: local-pv-postgres-main-2
+  labels:
+    type: local
+spec:
+  capacity:
+    storage: 100Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-storage
+  local:
+    path: /data/k8s-local-storage/postgres-main-2
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - mini02.homelab.internal
+
+---
+# PV for Node 3 (mini03.homelab.internal)
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: local-pv-postgres-main-3
+  labels:
+    type: local
+spec:
+  capacity:
+    storage: 100Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-storage
+  local:
+    path: /data/k8s-local-storage/postgres-main-3
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - mini03.homelab.internal

@@ -1,0 +1,30 @@
+# Cutover reference fragment for Proxmox networking.
+# Apply only after:
+# - switch VLANs are configured
+# - OPNsense management gateway is available on VLAN 10
+# - console access is available
+
+auto {{ proxmox_lan_physical_nic }}
+iface {{ proxmox_lan_physical_nic }} inet manual
+
+auto {{ proxmox_wan_physical_nic }}
+iface {{ proxmox_wan_physical_nic }} inet manual
+
+auto {{ proxmox_lan_bridge_name }}
+iface {{ proxmox_lan_bridge_name }} inet manual
+    bridge-ports {{ proxmox_lan_physical_nic }}
+    bridge-stp off
+    bridge-fd 0
+    bridge-vlan-aware yes
+    bridge-vids {{ proxmox_trunk_vlans | join(' ') }}
+
+auto {{ proxmox_lan_bridge_name }}.{{ proxmox_management_vlan_id }}
+iface {{ proxmox_lan_bridge_name }}.{{ proxmox_management_vlan_id }} inet static
+    address {{ pve_management_ip | default('REPLACE_WITH_PVE_MANAGEMENT_IP') }}/24
+    gateway {{ proxmox_management_gateway }}
+
+auto {{ proxmox_wan_bridge_name }}
+iface {{ proxmox_wan_bridge_name }} inet manual
+    bridge-ports {{ proxmox_wan_physical_nic }}
+    bridge-stp off
+    bridge-fd 0

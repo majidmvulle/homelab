@@ -1,0 +1,17 @@
+- name: Install NFS server package
+  ansible.builtin.apt:
+    name: nfs-kernel-server
+    state: present
+  tags: [nfs, packages]
+
+- name: Ensure nfs-kernel-server service is started and enabled
+  ansible.builtin.systemd:
+    name: nfs-kernel-server
+    state: started
+    enabled: yes
+  tags: [nfs, service]
+
+- name: Reminder for manual NFS exports configuration
+  ansible.builtin.debug:
+    msg: "NFS server is installed. Remember to configure /etc/exports manually and run 'sudo exportfs -ar'."
+  tags: [nfs]

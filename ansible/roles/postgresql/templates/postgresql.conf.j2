@@ -1,0 +1,82 @@
+# ansible/roles/postgresql/templates/postgresql.conf.j2
+
+#------------------------------------------------------------------------------
+# CONNECTIONS AND AUTHENTICATION
+#------------------------------------------------------------------------------
+listen_addresses = '*'
+port = {{ pg_port }}
+max_connections = 100
+
+# --- SSL CONFIGURATION ---
+ssl = on
+ssl_cert_file = '/etc/ssl/certs/ssl-cert-snakeoil.pem'
+ssl_key_file = '/etc/ssl/private/ssl-cert-snakeoil.key'
+# ------------------------------------
+
+#------------------------------------------------------------------------------
+# WRITE AHEAD LOG
+#------------------------------------------------------------------------------
+wal_level = replica
+# synchronous_commit = on # Default, consider 'local' or 'remote_write' for different trade-offs
+# synchronous_standby_names = '' # repmgr might manage this or you might set it for specific sync standbys
+
+# - Archiving -
+archive_mode = on # Recommended for production, even if just for repmgr's needs initially
+archive_command = '/bin/true' # Placeholder; for PITR, configure this properly (e.g., to pgBackRest or rsync)
+                               # repmgr relies on WAL streaming for standby setup.
+
+# - Sending Servers -
+max_wal_senders = 10         # Number of walsender processes
+wal_keep_size = 512MB      # In MB, or wal_keep_segments for older PG versions. Min WAL to keep for standbys.
+                           # Adjust based on WAL generation rate and standby needs.
+
+wal_level = replica
+wal_log_hints = on # Required for pg_rewind
+
+#------------------------------------------------------------------------------
+# REPLICATION
+#------------------------------------------------------------------------------
+# - Standby Servers -
+hot_standby = on # Allow read-only queries on standby servers
+
+#------------------------------------------------------------------------------
+# DATA DIRECTORY & CONFIG FILES
+#------------------------------------------------------------------------------
+data_directory = '{{ pg_data_dir }}'
+# hba_file = 'pg_hba.conf' # Default relative to data_directory, or absolute path
+# ident_file = 'pg_ident.conf' # Default relative to data_directory, or absolute path
+# external_pid_file = '/var/run/postgresql/{{ pg_version }}-main.pid' # Default on Debian
+
+#------------------------------------------------------------------------------
+# CUSTOMIZED OPTIONS / SHARED PRELOAD LIBRARIES
+#------------------------------------------------------------------------------
+shared_preload_libraries = 'repmgr'
+# Example if you have other libraries:
+# shared_preload_libraries = 'pg_stat_statements,repmgr'
+
+#------------------------------------------------------------------------------
+# REPORTING AND LOGGING
+#------------------------------------------------------------------------------
+log_destination = 'stderr' # Default, good for systemd journal
+logging_collector = on # Recommended for production
+log_directory = 'log' # Relative to data_directory, or absolute path
+log_filename = 'postgresql-%Y-%m-%d_%H%M%S.log' # Or other pattern
+log_statement = 'ddl' # Or 'mod', 'all' for more verbosity
+# log_min_duration_statement = 250ms # Log slow queries
+
+#------------------------------------------------------------------------------
+# RESOURCE USAGE (MEMORY) - Adjust based on 16GB RAM per node
+#------------------------------------------------------------------------------
+shared_buffers = 1GB # A common starting point for 8GB RAM is 1-2GB
+effective_cache_size = 3GB # Estimate of OS cache + shared_buffers
+work_mem = 16MB # Per sort operation, be careful with many connections
+maintenance_work_mem = 256MB # For VACUUM, CREATE INDEX, etc.
+
+#------------------------------------------------------------------------------
+# OTHER SETTINGS
+#------------------------------------------------------------------------------
+# lc_messages = 'en_US.UTF-8'
+# lc_monetary = 'en_US.UTF-8'
+# lc_numeric = 'en_US.UTF-8'
+# lc_time = 'en_US.UTF-8'
+# default_text_search_config = 'pg_catalog.english'

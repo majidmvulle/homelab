@@ -1,0 +1,114 @@
+traefik:
+  # -- Deployment strategy & HA replicas
+  deployment:
+    kind: Deployment
+    replicas: 2
+
+  # -- Service configuration
+  service:
+    enabled: true
+    type: LoadBalancer
+    spec:
+      loadBalancerIP: 10.0.0.18
+    annotations:
+      external-dns.alpha.kubernetes.io/hostname: traefik.homelab.internal
+
+  # -- Ports configuration
+  ports:
+    # HTTPS entrypoint
+    websecure:
+      port: 8443
+      asDefault: true
+      expose:
+        default: true
+      exposedPort: 443
+      protocol: TCP
+      tls:
+        enabled: true
+    # HTTP entrypoint - redirect to HTTPS
+    web:
+      port: 8000
+      asDefault: true
+      expose:
+        default: true
+      exposedPort: 80
+      protocol: TCP
+      # Redirect HTTP to HTTPS
+      redirectTo:
+        port: websecure
+        permanent: true
+    # MinIO API entrypoint (S3)
+    minioapi:
+      port: 9000
+      expose:
+        default: true
+      exposedPort: 9000
+      protocol: TCP
+      tls:
+        enabled: true
+    # MinIO Console entrypoint
+    minioconsole:
+      port: 9001
+      expose:
+        default: true
+      exposedPort: 9001
+      protocol: TCP
+      tls:
+        enabled: true
+    # SMTP entrypoint for Mailpit and other external SMTP consumers
+    mailsmtp:
+      port: 1025
+      expose:
+        default: true
+      exposedPort: 1025
+      protocol: TCP
+
+  # -- TLS configuration
+  tlsStore:
+    default:
+      defaultCertificate:
+        secretName: homelab-internal-wildcard-tls
+
+  # -- Logs
+  logs:
+    general:
+      level: INFO
+    access:
+      enabled: true
+
+  # -- IngressClass
+  ingressClass:
+    enabled: true
+    isDefaultClass: true
+
+  # -- Providers
+  providers:
+    kubernetesIngress:
+      enabled: true
+      publishedService:
+        enabled: true
+
+  # -- Resources
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
+  # -- Pod disruption budget for HA
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+
+  # -- Affinity rules
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchLabels:
+                app.kubernetes.io/name: traefik
+            topologyKey: kubernetes.io/hostname

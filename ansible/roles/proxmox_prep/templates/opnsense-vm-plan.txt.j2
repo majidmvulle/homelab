@@ -1,0 +1,24 @@
+OPNsense VM reference
+
+VM name: {{ proxmox_opnsense_vm.name }}
+VMID: {{ proxmox_opnsense_vm.vmid }}
+CPU cores: {{ proxmox_opnsense_vm.cpu_cores }}
+Memory (MB): {{ proxmox_opnsense_vm.memory_mb }}
+System disk (GB): {{ proxmox_opnsense_vm.system_disk_gb }}
+LAN trunk bridge: {{ proxmox_opnsense_vm.lan_trunk_bridge }}
+Dedicated WAN bridge: {{ proxmox_opnsense_vm.wan_bridge }}
+Start on boot: {{ proxmox_opnsense_vm.onboot | default(true) }}
+Startup order: {{ proxmox_opnsense_vm.startup_order | default(1) }}
+
+Planned NIC model:
+- net0 -> {{ proxmox_opnsense_vm.lan_trunk_bridge }} -> OPNsense LAN parent
+- net1 -> {{ proxmox_opnsense_vm.wan_bridge }} -> OPNsense WAN parent
+
+Planned OPNsense services:
+- Inter-VLAN routing
+- DHCP per VLAN
+- AdGuard Home
+- Unbound
+- WireGuard
+- NetFlow
+- Suricata

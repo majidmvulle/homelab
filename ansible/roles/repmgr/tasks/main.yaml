@@ -1,0 +1,217 @@
+---
+- name: Ensure standby data directory is clean for a fresh clone attempt (removes standby.signal)
+  ansible.builtin.file:
+    path: "{{ pg_data_dir }}/standby.signal"
+    state: absent # Ensure it's absent to allow clone task to run if needed
+  when: inventory_hostname in groups['postgres_standbys']
+  tags: [repmgr, standby, pre_clone_cleanup]
+
+- name: Install repmgr package for PostgreSQL {{ pg_version }}
+  ansible.builtin.apt:
+    name: "postgresql-{{ pg_version }}-repmgr"
+    state: present
+  tags: [repmgr, packages]
+
+# -----------------------------------------------------------------------------
+# SSH Key Setup (Full Mesh - Everyone connects to Everyone)
+# -----------------------------------------------------------------------------
+- name: Ensure .ssh directory exists for postgres user on all PostgreSQL nodes
+  ansible.builtin.file:
+    path: "/var/lib/postgresql/.ssh"
+    state: directory
+    owner: "{{ pg_user }}"
+    group: "{{ pg_group }}"
+    mode: '0700'
+  become: yes
+  tags: [repmgr, ssh]
+
+- name: Generate SSH key for postgres user on all nodes
+  community.crypto.openssh_keypair:
+    path: "{{ postgres_ssh_key_path }}"
+    type: "{{ postgres_ssh_key_type }}"
+    owner: "{{ pg_user }}"
+    group: "{{ pg_group }}"
+    mode: '0600'
+  become: yes
+  tags: [repmgr, ssh]
+
+- name: Read the postgres user's public key from each node
+  ansible.builtin.slurp:
+    src: "{{ postgres_ssh_key_path }}.pub"
+  register: postgres_public_key_file
+  tags: [repmgr, ssh]
+
+- name: Store the postgres user's public key as a host fact
+  ansible.builtin.set_fact:
+    postgres_public_key: "{{ postgres_public_key_file.content | b64decode | trim }}"
+  tags: [repmgr, ssh]
+
+- name: Authorize all nodes' public keys on all nodes (Full Mesh)
+  ansible.posix.authorized_key:
+    user: "{{ pg_user }}"
+    key: "{{ hostvars[item]['postgres_public_key'] }}"
+    state: present
+    path: "/var/lib/postgresql/.ssh/authorized_keys"
+    manage_dir: no
+  loop: "{{ groups['postgres_all'] }}"
+  become: yes
+  tags: [repmgr, ssh]
+
+# -----------------------------------------------------------------------------
+# Sudoers configuration
+# -----------------------------------------------------------------------------
+- name: Allow postgres user to manage PostgreSQL service via sudo for repmgrd
+  ansible.builtin.lineinfile:
+    path: /etc/sudoers.d/postgres_repmgr
+    line: "postgres ALL=(ALL) NOPASSWD: /bin/systemctl start postgresql@{{ pg_version }}-main.service, /bin/systemctl stop postgresql@{{ pg_version }}-main.service, /bin/systemctl restart postgresql@{{ pg_version }}-main.service, /bin/systemctl reload postgresql@{{ pg_version }}-main.service"
+    create: yes
+    validate: 'visudo -cf %s'
+    mode: '0440'
+  tags: [repmgr, sudo]
+
+# -----------------------------------------------------------------------------
+# Repmgr configuration file
+# -----------------------------------------------------------------------------
+- name: Template repmgr.conf file on all PostgreSQL nodes
+  ansible.builtin.template:
+    src: repmgr.conf.j2
+    dest: "{{ repmgr_config_file }}"
+    owner: "{{ pg_user }}"
+    group: "{{ pg_group }}"
+    mode: '0640'
+  notify: Restart repmgrd
+  tags: [repmgr, config]
+
+# -----------------------------------------------------------------------------
+# Repmgr Primary Registration
+# -----------------------------------------------------------------------------
+- name: Register primary node with repmgr (direct sudo -iu postgres)
+  ansible.builtin.command:
+    cmd: >
+      sudo -iu {{ pg_user }}
+      {{ pg_bin_dir }}/repmgr -f {{ repmgr_config_file }} primary register --force
+  become: yes # Task itself runs with become (e.g. as root) to be able to run sudo
+  when: inventory_hostname in groups['postgres_primary']
+  changed_when: true
+  tags: [repmgr, primary, register]
+
+# -----------------------------------------------------------------------------
+# Repmgr Standby Cloning and Registration
+# -----------------------------------------------------------------------------
+- name: Ensure PostgreSQL is stopped before cloning
+  ansible.builtin.systemd:
+    name: "postgresql@{{ pg_version }}-main.service"
+    state: stopped
+  when: inventory_hostname in groups['postgres_standbys']
+  tags: [repmgr, standby, clone]
+
+- name: Clone standby from primary node (direct sudo -iu postgres)
+  ansible.builtin.command:
+    cmd: >
+      sudo -iu {{ pg_user }}
+      {{ pg_bin_dir }}/repmgr -h {{ repmgr_primary_host }} -U {{ repmgr_user }} -d {{ repmgr_db }}
+      -f {{ repmgr_config_file }} standby clone --force --verbose
+      --pgdata={{ pg_data_dir }}
+  args:
+    creates: "{{ pg_data_dir }}/standby.signal"
+  environment:
+    PGPASSWORD: "{{ repmgr_password }}"
+  become: yes
+  register: repmgr_clone_output
+  failed_when: "'ERROR:' in repmgr_clone_output.stderr or 'FATAL:' in repmgr_clone_output.stderr or repmgr_clone_output.rc != 0"
+  changed_when: "'NOTICE: standby clone' in repmgr_clone_output.stderr and 'complete' in repmgr_clone_output.stderr"
+  when: inventory_hostname in groups['postgres_standbys']
+  throttle: 1
+  tags: [repmgr, standby, clone]
+
+- name: Debug repmgr clone output
+  ansible.builtin.debug:
+    var: repmgr_clone_output
+  when: inventory_hostname in groups['postgres_standbys']
+  tags: [repmgr, standby, clone, debugclone]
+
+- name: Explicitly restart PostgreSQL service on standby after clone attempt
+  ansible.builtin.systemd:
+    name: "postgresql@{{ pg_version }}-main.service"
+    state: restarted
+    enabled: yes
+    daemon_reload: yes
+  when: inventory_hostname in groups['postgres_standbys']
+  tags: [repmgr, standby, service_management]
+
+- name: Wait for PostgreSQL to be ready on standby IP after start
+  ansible.builtin.wait_for:
+    host: "{{ inventory_hostname }}"
+    port: "{{ pg_port }}"
+    delay: 5
+    timeout: 60
+    state: started
+  when: inventory_hostname in groups['postgres_standbys']
+  tags: [repmgr, standby, service_management]
+
+- name: Register standby node with repmgr (direct sudo -iu postgres)
+  ansible.builtin.command:
+    cmd: >
+      sudo -iu {{ pg_user }}
+      {{ pg_bin_dir }}/repmgr -f {{ repmgr_config_file }} standby register --force
+  become: yes # Task itself runs with become (e.g. as root)
+  when: inventory_hostname in groups['postgres_standbys']
+  changed_when: true # repmgr register --force usually implies a change or ensures state
+  tags: [repmgr, standby, register]
+
+# -----------------------------------------------------------------------------
+# Repmgrd (Replication Manager Daemon) Service Setup
+# -----------------------------------------------------------------------------
+- name: Template repmgrd systemd service unit
+  ansible.builtin.template:
+    src: repmgrd.service.j2
+    dest: /etc/systemd/system/repmgrd.service
+    mode: '0644'
+  notify: Reload systemd and restart repmgrd
+  tags: [repmgr, repmgrd, service]
+
+- name: Enable and start repmgrd service on all PostgreSQL nodes
+  ansible.builtin.systemd:
+    name: repmgrd
+    enabled: yes
+    state: started
+    daemon_reload: yes
+  tags: [repmgr, repmgrd, service]
+
+# -----------------------------------------------------------------------------
+# Keepalived VIP Setup (Writer & Reader)
+# -----------------------------------------------------------------------------
+- name: Install Keepalived
+  ansible.builtin.apt:
+    name: keepalived
+    state: present
+  tags: [repmgr, vip]
+
+- name: Deploy PostgreSQL Primary check script
+  ansible.builtin.template:
+    src: check_pg_primary.sh.j2
+    dest: /usr/local/bin/check_pg_primary.sh
+    mode: '0755'
+  tags: [repmgr, vip]
+
+- name: Deploy PostgreSQL Standby check script
+  ansible.builtin.template:
+    src: check_pg_standby.sh.j2
+    dest: /usr/local/bin/check_pg_standby.sh
+    mode: '0755'
+  tags: [repmgr, vip]
+
+- name: Configure Keepalived for PostgreSQL
+  ansible.builtin.template:
+    src: keepalived_pg.conf.j2
+    dest: /etc/keepalived/conf.d/postgres.conf
+    mode: '0644'
+  notify: Restart keepalived
+  tags: [repmgr, vip]
+
+- name: Ensure Keepalived is enabled and started
+  ansible.builtin.systemd:
+    name: keepalived
+    state: started
+    enabled: yes
+  tags: [repmgr, vip]

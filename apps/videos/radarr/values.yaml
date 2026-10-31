@@ -1,0 +1,41 @@
+image:
+  repository: linuxserver/radarr
+  tag: "6.4.4"
+deploymentStrategy:
+  type: Recreate
+env:
+  TZ: "Asia/Dubai"
+  PUID: "1000"
+  PGID: "1000"
+service:
+  type: ClusterIP
+  port: 7878
+ingress:
+  enabled: true
+  host: radarr.homelab.internal
+persistence:
+  config:
+    storageClass: "longhorn-persistent"
+    size: 5Gi
+  media:
+    size: 100Gi
+    nfs:
+      path: /volume1/k3s/data/videos/movies
+      server: synology01.homelab.internal
+  downloads:
+    size: 50Gi
+    nfs:
+      path: /volume1/k3s/data/downloads
+      server: synology01.homelab.internal
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 400m
+    memory: 512Mi
+securityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+podSecurityContext:
+  fsGroup: 1000

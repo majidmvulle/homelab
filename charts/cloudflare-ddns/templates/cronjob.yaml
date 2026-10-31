@@ -1,0 +1,44 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "cloudflare-ddns.fullname" . }}
+  labels:
+    {{ include "cloudflare-ddns.labels" . | nindent 4 }}
+spec:
+  schedule: "{{ .Values.schedule }}"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            {{ include "cloudflare-ddns.selectorLabels" . | nindent 12 }}
+          annotations:
+            checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: cloudflare-ddns
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              command: ["/bin/bash", "/config/ddns.sh"]
+              env:
+                - name: CLOUDFLARE_API_TOKEN
+                  valueFrom:
+                    secretKeyRef:
+                      name: cloudflare-ddns-secret
+                      key: api-token
+              volumeMounts:
+                - name: config-volume
+                  mountPath: /config
+              resources:
+                {{ toYaml .Values.resources | nindent 16 }}
+              securityContext:
+                {{ toYaml .Values.securityContext | nindent 16 }}
+          volumes:
+            - name: config-volume
+              configMap:
+                name: {{ include "cloudflare-ddns.fullname" . }}-config
+                defaultMode: 0755

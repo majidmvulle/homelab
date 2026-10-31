@@ -1,0 +1,5 @@
+---
+manual_network_devices_documented_only: true
+manual_network_devices:
+  - switch01.homelab.internal
+  - ap01.homelab.internal

@@ -1,0 +1,109 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Release.Name }}-test
+  namespace: {{ .Release.Namespace }}
+  labels:
+    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version }}
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ .Release.Name }}-test-role
+  labels:
+    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version }}
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+rules:
+- apiGroups: [""]
+  resources: ["secrets"]
+  resourceNames: ["homelab-ca-secret"]
+  verbs: ["get"]
+- apiGroups: ["cert-manager.io"]
+  resources: ["clusterissuers"]
+  verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ .Release.Name }}-test-rolebinding
+  labels:
+    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version }}
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ .Release.Name }}-test-role
+subjects:
+- kind: ServiceAccount
+  name: {{ .Release.Name }}-test
+  namespace: {{ .Release.Namespace }}
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ .Release.Name }}-test-ca-issuer
+  labels:
+    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version }}
+  annotations:
+    "helm.sh/hook": test
+spec:
+  serviceAccountName: {{ .Release.Name }}-test
+  containers:
+    - name: test
+      image: busybox:1.36.1
+      command:
+        - sh
+        - -c
+        - |
+          TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+          URL="https://kubernetes.default.svc/apis/cert-manager.io/v1/clusterissuers"
+          SECRET_URL="https://kubernetes.default.svc/api/v1/namespaces/external-secrets-vault/secrets/homelab-ca-secret"
+
+          check_source_secret() {
+            echo "Checking external-secrets-vault/homelab-ca-secret..."
+            RESPONSE=$(wget --header "Authorization: Bearer $TOKEN" --no-check-certificate -O- "$SECRET_URL" 2>/dev/null || true)
+
+            if [ -z "$RESPONSE" ]; then
+              echo "Required source secret external-secrets-vault/homelab-ca-secret is missing"
+              return 1
+            fi
+
+            echo "$RESPONSE" | grep -q '"tls.crt"' || return 1
+            echo "$RESPONSE" | grep -q '"tls.key"' || return 1
+            echo "$RESPONSE" | grep -q '"ca.crt"' || return 1
+
+            echo "Source secret is present"
+            return 0
+          }
+
+          check_issuer() {
+            issuer=$1
+            echo "Checking $issuer..."
+            # Poll for up to 60 seconds (12 * 5s)
+            for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
+              RESPONSE=$(wget --header "Authorization: Bearer $TOKEN" --no-check-certificate -O- "$URL/$issuer" 2>/dev/null)
+              if echo "$RESPONSE" | grep -q '"type":"Ready"' && echo "$RESPONSE" | grep -q '"status":"True"'; then
+                echo "$issuer is Ready"
+                return 0
+              fi
+              if echo "$RESPONSE" | grep -q '"type": "Ready"' && echo "$RESPONSE" | grep -q '"status": "True"'; then
+                echo "$issuer is Ready"
+                return 0
+              fi
+              echo "Waiting for $issuer..."
+              sleep 5
+            done
+            echo "$issuer failed to become Ready"
+            return 1
+          }
+
+          check_source_secret
+          check_issuer "ca-issuer"
+  restartPolicy: Never

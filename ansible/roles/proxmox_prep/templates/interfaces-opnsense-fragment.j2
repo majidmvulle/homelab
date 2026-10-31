@@ -1,0 +1,14 @@
+# OPNsense reference fragment.
+# This file is informational and should not be copied directly without review.
+
+# OPNsense VM net0 bridge: {{ proxmox_opnsense_vm.lan_trunk_bridge }}
+# OPNsense VM net1 bridge: {{ proxmox_opnsense_vm.wan_bridge }}
+# Flat Wi-Fi VLAN: {{ proxmox_flat_wifi_vlan_id }}
+# Flat Wi-Fi AP mode: {{ proxmox_flat_wifi_ap_mode }}
+
+# net0 carries the LAN trunk with these tagged VLANs:
+{% for vlan in proxmox_trunk_vlans %}
+# - VLAN {{ vlan }}
+{% endfor %}
+
+# net1 is a dedicated WAN handoff with no VLAN tag translation on Proxmox.

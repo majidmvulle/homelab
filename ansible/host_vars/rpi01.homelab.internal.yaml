@@ -1,0 +1,8 @@
+---
+device_platform: raspberry-pi-4b
+device_cpu: cortex-a72
+device_ram_gb: 8
+device_storage:
+  os: 256GB-m2-sata
+network_role: raspi-general-purpose
+planned_vlan: servers

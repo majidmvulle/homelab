@@ -1,0 +1,14 @@
+Syncthing has been deployed.
+
+1. Get the application URL by running these commands:
+   {{- if .Values.service.loadBalancerIP }}
+   export SERVICE_IP="{{ .Values.service.loadBalancerIP }}"
+   {{- else }}
+   export SERVICE_IP=$(kubectl get svc --namespace {{ .Release.Namespace }} {{ include "syncthing.fullname" . }} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+   {{- end }}
+   echo "Access the Syncthing Web UI at: http://${SERVICE_IP}:{{ .Values.service.ports.webUI }}"
+
+2. When configuring Syncthing for the first time, go to Actions -> Settings -> GUI to set a username and password.
+
+3. Your music library is mounted inside the container at {{ .Values.persistence.music.mountPath }}.
+   Add this path as a new folder in the Syncthing UI to begin sharing it.

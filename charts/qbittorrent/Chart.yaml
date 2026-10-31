@@ -1,0 +1,7 @@
+apiVersion: v2
+name: qbittorrent
+description: A Helm chart for qBittorrent with Wireguard VPN support
+type: application
+version: 0.1.1
+appVersion: "release-5.1.0"
+dependencies: []

@@ -1,0 +1,84 @@
+---
+- name: Verify Proxmox preparation target is Debian-based
+  ansible.builtin.assert:
+    that:
+      - ansible_os_family == "Debian"
+    fail_msg: "The proxmox_prep role expects a Debian-based Proxmox host."
+
+- name: Verify required Proxmox network variables
+  ansible.builtin.assert:
+    that:
+      - proxmox_lan_bridge_name is defined
+      - proxmox_lan_physical_nic is defined
+      - proxmox_wan_bridge_name is defined
+      - proxmox_wan_physical_nic is defined
+      - proxmox_management_vlan_id is defined
+      - proxmox_trunk_vlans is defined
+      - proxmox_opnsense_vm is defined
+    fail_msg: "Missing required Proxmox network variables."
+
+- name: Gather installed package facts on Proxmox host
+  ansible.builtin.package_facts:
+    manager: auto
+  tags: [proxmox, packages]
+
+- name: Warn when optional Proxmox network helper packages are missing
+  ansible.builtin.debug:
+    msg:
+      - "Optional package '{{ item }}' is not currently installed on {{ inventory_hostname }}."
+      - "The planning role can continue, but install it manually before applying host network changes if required."
+  loop:
+    - ifupdown2
+    - vlan
+    - bridge-utils
+  when: item not in ansible_facts.packages
+  tags: [proxmox, packages]
+
+- name: Ensure Proxmox planning directory exists
+  ansible.builtin.file:
+    path: /root/homelab
+    state: directory
+    mode: "0755"
+  tags: [proxmox, planning]
+
+- name: Ensure Proxmox staged interfaces directory exists
+  ansible.builtin.file:
+    path: /root/homelab/interfaces.d
+    state: directory
+    mode: "0755"
+  tags: [proxmox, planning]
+
+- name: Render Proxmox network reference
+  ansible.builtin.template:
+    src: proxmox-network-plan.txt.j2
+    dest: /root/homelab/proxmox-network-plan.txt
+    mode: "0644"
+  tags: [proxmox, planning]
+
+- name: Render staged Proxmox bootstrap interfaces fragment
+  ansible.builtin.template:
+    src: interfaces-proxmox-bootstrap.j2
+    dest: /root/homelab/interfaces.d/40-homelab-proxmox-bootstrap.cfg
+    mode: "0644"
+  tags: [proxmox, planning]
+
+- name: Render staged Proxmox cutover interfaces fragment
+  ansible.builtin.template:
+    src: interfaces-proxmox-fragment.j2
+    dest: /root/homelab/interfaces.d/50-homelab-proxmox.cfg
+    mode: "0644"
+  tags: [proxmox, planning]
+
+- name: Render staged OPNsense bridge notes
+  ansible.builtin.template:
+    src: interfaces-opnsense-fragment.j2
+    dest: /root/homelab/interfaces.d/60-homelab-opnsense.cfg
+    mode: "0644"
+  tags: [proxmox, planning]
+
+- name: Render OPNsense VM reference
+  ansible.builtin.template:
+    src: opnsense-vm-plan.txt.j2
+    dest: /root/homelab/opnsense-vm-plan.txt
+    mode: "0644"
+  tags: [proxmox, planning]

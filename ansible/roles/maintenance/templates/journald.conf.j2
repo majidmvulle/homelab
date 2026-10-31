@@ -1,0 +1,10 @@
+[Journal]
+Storage=persistent
+# Limit total disk usage for logs to 1GB
+SystemMaxUse=1G
+# Keep at least 2GB of disk space free no matter what
+SystemKeepFree=2G
+# Limit the size of individual log files
+SystemMaxFileSize=100M
+# How long to keep logs (optional, MaxUse usually overrides this)
+MaxRetentionSec=1week

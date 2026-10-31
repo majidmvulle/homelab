@@ -1,0 +1,56 @@
+---
+- name: Verify Raspberry Pi baseline target is Debian-based
+  ansible.builtin.assert:
+    that:
+      - ansible_os_family == "Debian"
+    fail_msg: "The raspi_baseline role expects Raspberry Pi OS or another Debian-based image."
+
+- name: Update apt cache
+  ansible.builtin.apt:
+    update_cache: yes
+    cache_valid_time: 3600
+  tags: [raspi, packages]
+
+- name: Install Raspberry Pi baseline packages
+  ansible.builtin.apt:
+    name: "{{ raspi_packages }}"
+    state: present
+  tags: [raspi, packages]
+
+- name: Ensure SSH service is enabled
+  ansible.builtin.systemd:
+    name: ssh
+    enabled: yes
+    state: started
+  when: raspi_enable_ssh | bool
+  tags: [raspi, ssh]
+
+- name: Set hostname from inventory name
+  ansible.builtin.hostname:
+    name: "{{ inventory_hostname }}"
+  tags: [raspi, hostname]
+
+- name: Ensure USB host mode overlay for Ethernet HAT hosts
+  ansible.builtin.lineinfile:
+    path: /boot/firmware/config.txt
+    regexp: '^dtoverlay=dwc2,dr_mode=host$'
+    line: 'dtoverlay=dwc2,dr_mode=host'
+    state: present
+  when:
+    - has_usb_ethernet_hat | default(false) | bool
+    - raspi_enable_usb_ethernet_host_mode | bool
+  tags: [raspi, usb_ethernet]
+
+- name: Ensure baseline workspace directory exists
+  ansible.builtin.file:
+    path: /opt/homelab
+    state: directory
+    mode: "0755"
+  tags: [raspi, filesystem]
+
+- name: Render Raspberry Pi host summary
+  ansible.builtin.template:
+    src: raspi-host-summary.txt.j2
+    dest: /opt/homelab/raspi-host-summary.txt
+    mode: "0644"
+  tags: [raspi, planning]

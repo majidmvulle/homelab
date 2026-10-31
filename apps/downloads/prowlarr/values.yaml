@@ -1,0 +1,6 @@
+# Prowlarr values for homelab deployment
+deploymentStrategy:
+  type: Recreate
+ingress:
+  enabled: true
+  host: prowlarr.homelab.internal

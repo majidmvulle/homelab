@@ -1,0 +1,55 @@
+image:
+  repository: ghcr.io/hotio/qbittorrent
+  tag: "release-5.1.0"
+deploymentStrategy:
+  type: Recreate
+podSecurityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  sysctls:
+    - name: net.ipv4.conf.all.src_valid_mark
+      value: "1"
+    - name: net.ipv6.conf.all.disable_ipv6
+      value: "1"
+env:
+  TZ: Etc/UTC
+  PUID: 1000
+  PGID: 1000
+  UMASK: "002"
+  WEBUI_PORTS: "8080/tcp,8080/udp"
+service:
+  type: ClusterIP
+  port: 8080
+  targetPort: 8080
+ingress:
+  enabled: true
+  host: torrent.homelab.internal
+wireguard:
+  enabled: true
+  configMapName: mullvad-config-ch-zrh-002
+  configFileName: wg0
+  vpnProvider: generic
+  vpnLanNetwork: "10.0.0.100/32"
+  vpnLanLeakEnabled: "false"
+  vpnHealthcheckEnabled: "true"
+  vpnNameServers: "wg"
+persistence:
+  config:
+    accessMode: ReadWriteOnce
+    size: 5Gi
+    storageClass: "longhorn-persistent"
+  downloads:
+    accessMode: ReadWriteMany
+    size: 200Gi
+    nfs:
+      path: /volume1/k3s/data/downloads/qbittorrent
+      server: synology01.homelab.internal
+      readOnly: false
+resources:
+  requests:
+    cpu: 50m
+    memory: 512Mi
+  limits:
+    cpu: 300m
+    memory: 768Mi

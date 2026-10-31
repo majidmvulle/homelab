@@ -1,0 +1,95 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "haproxy.fullname" . }}
+  labels:
+    {{- include "haproxy.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "haproxy.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "haproxy.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: {{ .Chart.Name }}
+          {{- with .Values.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              cp /config-template/haproxy.cfg.tmpl /tmp/haproxy.cfg
+              {{- range .Values.config.templateVariables }}
+              sed -i "s|{{ .placeholder }}|$(printf '%s' ${{ .envVar }} | sed -e 's/[\\&|]/\\\\&/g')|g" /tmp/haproxy.cfg
+              {{- end }}
+              exec haproxy -W -db -f /tmp/haproxy.cfg
+          {{- with .Values.extraEnv }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+            - name: {{ .Values.service.portName }}
+              containerPort: {{ .Values.containerPort }}
+              protocol: TCP
+            # Add https port if needed later
+            # - name: https
+            #   containerPort: 8443
+            #   protocol: TCP
+          volumeMounts:
+            - name: config-volume
+              mountPath: /config-template
+              readOnly: true
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          # Liveness and Readiness probes are recommended for production
+          # livenessProbe:
+          #   httpGet:
+          #     path: /healthz # You might need to configure a health check endpoint in HAProxy
+          #     port: http
+          # readinessProbe:
+          #   httpGet:
+          #     path: /readyz # You might need to configure a readiness endpoint
+          #     port: http
+      volumes:
+        - name: config-volume
+          configMap:
+            name: {{ include "haproxy.fullname" . }}-config
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app.kubernetes.io/name
+                      operator: In
+                      values:
+                        - {{ include "haproxy.name" . }}
+                    - key: app.kubernetes.io/instance
+                      operator: In
+                      values:
+                        - {{ .Release.Name }}
+                topologyKey: "kubernetes.io/hostname"
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

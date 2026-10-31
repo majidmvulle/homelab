@@ -1,0 +1,54 @@
+apiVersion: longhorn.io/v1beta2
+kind: Setting
+metadata:
+  name: auto-salvage
+  namespace: longhorn-system
+value: "false"
+
+---
+apiVersion: longhorn.io/v1beta2
+kind: Setting
+metadata:
+  name: disable-revision-counter
+  namespace: longhorn-system
+value: '{"v1":"false"}'
+
+---
+apiVersion: longhorn.io/v1beta2
+kind: Setting
+metadata:
+  name: engine-replica-timeout
+  namespace: longhorn-system
+value: '{"v1":"8","v2":"8"}'
+
+---
+apiVersion: longhorn.io/v1beta2
+kind: Setting
+metadata:
+  name: guaranteed-instance-manager-cpu
+  namespace: longhorn-system
+value: '{"v1":"12","v2":"20"}'
+
+---
+apiVersion: longhorn.io/v1beta2
+kind: Setting
+metadata:
+  name: fast-replica-rebuild-enabled
+  namespace: longhorn-system
+value: '{"v1":"true","v2":"true"}'
+
+---
+apiVersion: longhorn.io/v1beta2
+kind: Setting
+metadata:
+  name: snapshot-data-integrity-immediate-check-after-snapshot-creation
+  namespace: longhorn-system
+value: '{"v1":"false","v2":"false"}'
+
+---
+apiVersion: longhorn.io/v1beta2
+kind: Setting
+metadata:
+  name: snapshot-data-integrity-cronjob
+  namespace: longhorn-system
+value: '{"v1":"0 0 */7 * *","v2":"0 0 */7 * *"}'

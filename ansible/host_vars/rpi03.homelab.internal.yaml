@@ -1,0 +1,10 @@
+---
+device_platform: raspberry-pi-zero-2w
+device_cpu: cortex-a53
+device_ram_mb: 512
+device_storage:
+  os: 32GB-a1-microsd
+has_usb_ethernet_hat: true
+network_role: retired-pihole
+planned_vlan: management
+planned_status_after_dns_migration: retired-from-dns-duty

@@ -1,0 +1,50 @@
+image:
+  repository: ghcr.io/majidmvulle/nfs-server-docker
+  tag: v1.0.5
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+persistence:
+  enabled: true
+  storageClass: "longhorn-persistent-rwx"
+  accessMode: ReadWriteMany
+  size: 80Gi
+  mountPath: /mnt
+
+service:
+  type: LoadBalancer
+  port: 2049
+  # we are forcing the clusterIP here because K8s has a bug where an nfs service can't be reached via DNS.
+  # This ip address then has an entry in Local DNS in pi-hole (nfs-server-service.downloads.svc.cluster.local 10.43.131.47)
+  # If you don't have a pi-hole for DNS, you can add /etc/hosts in each Node.
+  # https://github.com/kubernetes/minikube/issues/2218#issuecomment-436821733
+  clusterIP: 10.43.131.47
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi
+
+securityContext:
+  runAsUser: 1000
+  runAsGroup: 3000
+  runAsNonRoot: true
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+    add:
+      - SYS_ADMIN
+
+podSecurityContext:
+  fsGroup: 2000
+
+nfs:
+  allowedClient: "*"
+  nfsOptions: "rw,fsid=0,sync,no_subtree_check,no_root_squash"
+  sharedDirectory: /nfs-server

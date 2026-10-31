@@ -1,0 +1,200 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "valkey.fullname" . }}-config
+  labels:
+    {{- include "valkey.labels" . | nindent 4 }}
+data:
+  valkey.conf: |
+    # Network configuration
+    bind 0.0.0.0
+    port {{ .Values.service.port }}
+    protected-mode yes
+    
+    # Memory configuration
+    maxmemory {{ .Values.valkeyConfig.maxmemory }}
+    maxmemory-policy {{ .Values.valkeyConfig.maxmemoryPolicy }}
+    
+    # Replication configuration
+    {{- if .Values.replication.enabled }}
+    replica-read-only {{ .Values.valkeyConfig.replicaReadOnly }}
+    {{- end }}
+    
+    # Persistence configuration
+    {{- if eq .Values.persistence.mode "rdb" "both" }}
+    save {{ .Values.valkeyConfig.save }}
+    {{- end }}
+    {{- if eq .Values.persistence.mode "aof" "both" }}
+    appendonly {{ .Values.valkeyConfig.appendonly }}
+    appendfsync {{ .Values.valkeyConfig.appendfsync }}
+    {{- end }}
+    
+    # Logging
+    loglevel notice
+    
+    # Security
+    {{- if .Values.auth.enabled }}
+    requirepass VALKEY_PASSWORD
+    masterauth VALKEY_PASSWORD
+    {{- end }}
+
+  start-valkey.sh: |
+    #!/bin/sh
+    set -eu
+
+    SELF_HOST="$(hostname).{{ include "valkey.fullname" . }}-headless.{{ .Release.Namespace }}.svc.cluster.local"
+    BOOTSTRAP_HOST="{{ include "valkey.fullname" . }}-0.{{ include "valkey.fullname" . }}-headless.{{ .Release.Namespace }}.svc.cluster.local"
+    BOOTSTRAP_PORT="{{ .Values.service.port }}"
+    SENTINEL_PORT="{{ .Values.sentinelConfig.port }}"
+    REPLICA_COUNT="{{ .Values.replication.replicas }}"
+    DISCOVERY_RETRIES=30
+    DISCOVERY_DELAY_SECONDS=2
+
+    {{- if .Values.auth.enabled }}
+    escaped_password=$(printf '%s' "$VALKEY_PASSWORD" | sed -e 's/[|&]/\\&/g')
+    sed "s|VALKEY_PASSWORD|$escaped_password|g" /etc/valkey/valkey.conf > /data/valkey.conf
+    {{- else }}
+    cp /etc/valkey/valkey.conf /data/valkey.conf
+    {{- end }}
+
+    find_master_from_local_sentinel_state() {
+      if [ ! -f /data/sentinel.conf ]; then
+        return 1
+      fi
+
+      master_host=$(awk '/^sentinel monitor mymaster / { print $4; exit }' /data/sentinel.conf)
+      master_port=$(awk '/^sentinel monitor mymaster / { print $5; exit }' /data/sentinel.conf)
+
+      if [ -n "$master_host" ] && [ -n "$master_port" ]; then
+        printf '%s\n%s\n' "$master_host" "$master_port"
+        return 0
+      fi
+
+      return 1
+    }
+
+    find_master_from_sentinel() {
+      idx=0
+      while [ "$idx" -lt "$REPLICA_COUNT" ]; do
+        sentinel_host="{{ include "valkey.fullname" . }}-${idx}.{{ include "valkey.fullname" . }}-headless.{{ .Release.Namespace }}.svc.cluster.local"
+        master_info=$(valkey-cli -h "$sentinel_host" -p "$SENTINEL_PORT" SENTINEL get-master-addr-by-name mymaster 2>/dev/null || true)
+
+        if [ -n "$master_info" ]; then
+          master_host=$(printf '%s\n' "$master_info" | sed -n '1p')
+          master_port=$(printf '%s\n' "$master_info" | sed -n '2p')
+
+          if [ -n "$master_host" ] && [ -n "$master_port" ]; then
+            printf '%s\n%s\n' "$master_host" "$master_port"
+            return 0
+          fi
+        fi
+
+        idx=$((idx + 1))
+      done
+
+      return 1
+    }
+
+    start_as_primary() {
+      echo "Starting Valkey as primary"
+      exec valkey-server /data/valkey.conf --dir /data
+    }
+
+    start_as_replica() {
+      master_host="$1"
+      master_port="$2"
+      echo "Starting Valkey as replica of ${master_host}:${master_port}"
+      exec valkey-server /data/valkey.conf --dir /data --replicaof "$master_host" "$master_port"
+    }
+
+    {{- if .Values.replication.enabled }}
+    {{- if .Values.sentinel.enabled }}
+    attempt=1
+    while [ "$attempt" -le "$DISCOVERY_RETRIES" ]; do
+      sentinel_master="$(find_master_from_sentinel || true)"
+      if [ -n "$sentinel_master" ]; then
+        master_host=$(printf '%s\n' "$sentinel_master" | sed -n '1p')
+        master_port=$(printf '%s\n' "$sentinel_master" | sed -n '2p')
+        echo "Sentinel reports current master ${master_host}:${master_port}"
+
+        if [ "$master_host" = "$SELF_HOST" ]; then
+          start_as_primary
+        fi
+
+        start_as_replica "$master_host" "$master_port"
+      fi
+
+      echo "Waiting for Sentinel to report the current master (${attempt}/${DISCOVERY_RETRIES})"
+      sleep "$DISCOVERY_DELAY_SECONDS"
+      attempt=$((attempt + 1))
+    done
+
+    echo "Sentinel master discovery unavailable, falling back to bootstrap topology"
+
+    local_sentinel_master="$(find_master_from_local_sentinel_state || true)"
+    if [ -n "$local_sentinel_master" ]; then
+      master_host=$(printf '%s\n' "$local_sentinel_master" | sed -n '1p')
+      master_port=$(printf '%s\n' "$local_sentinel_master" | sed -n '2p')
+      echo "Using persisted Sentinel state for current master ${master_host}:${master_port}"
+
+      if [ "$master_host" = "$SELF_HOST" ]; then
+        start_as_primary
+      fi
+
+      start_as_replica "$master_host" "$master_port"
+    fi
+    {{- end }}
+
+    if [ "$(hostname)" = "{{ include "valkey.fullname" . }}-0" ]; then
+      start_as_primary
+    fi
+
+    until valkey-cli -h "$BOOTSTRAP_HOST" -p "$BOOTSTRAP_PORT" {{- if .Values.auth.enabled }} -a "$VALKEY_PASSWORD" {{- end }} ping 2>/dev/null | grep -q PONG; do
+      echo "Waiting for bootstrap primary ${BOOTSTRAP_HOST}:${BOOTSTRAP_PORT}"
+      sleep "$DISCOVERY_DELAY_SECONDS"
+    done
+
+    start_as_replica "$BOOTSTRAP_HOST" "$BOOTSTRAP_PORT"
+    {{- else }}
+    start_as_primary
+    {{- end }}
+
+  {{- if .Values.sentinel.enabled }}
+  sentinel.conf: |
+    # Sentinel configuration
+    port {{ .Values.sentinelConfig.port }}
+    dir /tmp
+    sentinel resolve-hostnames yes
+    sentinel announce-hostnames yes
+    
+    # Monitor the primary
+    sentinel monitor mymaster {{ include "valkey.fullname" . }}-0.{{ include "valkey.fullname" . }}-headless.{{ .Release.Namespace }}.svc.cluster.local {{ .Values.service.port }} {{ .Values.sentinelConfig.quorum }}
+    
+    # Sentinel timeouts
+    sentinel down-after-milliseconds mymaster {{ .Values.sentinelConfig.downAfterMilliseconds }}
+    sentinel failover-timeout mymaster {{ .Values.sentinelConfig.failoverTimeout }}
+    sentinel parallel-syncs mymaster {{ .Values.sentinelConfig.parallelSyncs }}
+    
+    # Security
+    {{- if .Values.auth.enabled }}
+    sentinel auth-pass mymaster VALKEY_PASSWORD
+    {{- end }}
+
+  start-sentinel.sh: |
+    #!/bin/sh
+    set -eu
+
+    if [ -f /data/sentinel.conf ]; then
+      echo "Reusing persisted Sentinel state"
+    else
+      echo "Bootstrapping new Sentinel state"
+      {{- if .Values.auth.enabled }}
+      escaped_password=$(printf '%s' "$VALKEY_PASSWORD" | sed -e 's/[|&]/\\&/g')
+      sed "s|VALKEY_PASSWORD|$escaped_password|g" /etc/valkey/sentinel.conf > /data/sentinel.conf
+      {{- else }}
+      cp /etc/valkey/sentinel.conf /data/sentinel.conf
+      {{- end }}
+    fi
+
+    exec valkey-sentinel /data/sentinel.conf
+  {{- end }}

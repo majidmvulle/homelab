@@ -1,0 +1,63 @@
+# Script to check if node is Primary
+vrrp_script chk_pg_primary {
+    script "/usr/local/bin/check_pg_primary.sh"
+    interval 2
+    weight 20 # If script passes, priority increases by 20
+    fall 2
+    rise 2
+}
+
+# Script to check if node is Standby
+vrrp_script chk_pg_standby {
+    script "/usr/local/bin/check_pg_standby.sh"
+    interval 2
+    weight 20 # If script passes, priority increases by 20
+    fall 2
+    rise 2
+}
+
+# --- WRITER INSTANCE ---
+# Only the Primary node will have high enough priority to hold this
+vrrp_instance VI_PG_WRITER {
+    state BACKUP
+    interface {{ pg_vip_interface }}
+    virtual_router_id 61
+    priority 100
+    advert_int 1
+
+    authentication {
+        auth_type PASS
+        auth_pass pg_vip_secret
+    }
+
+    virtual_ipaddress {
+        {{ pg_vip_writer }}/24
+    }
+
+    track_script {
+        chk_pg_primary
+    }
+}
+
+# --- READER INSTANCE ---
+# Only Standby nodes will have high enough priority to hold this
+vrrp_instance VI_PG_READER {
+    state BACKUP
+    interface {{ pg_vip_interface }}
+    virtual_router_id 62
+    priority 100
+    advert_int 1
+
+    authentication {
+        auth_type PASS
+        auth_pass pg_vip_secret
+    }
+
+    virtual_ipaddress {
+        {{ pg_vip_reader }}/24
+    }
+
+    track_script {
+        chk_pg_standby
+    }
+}

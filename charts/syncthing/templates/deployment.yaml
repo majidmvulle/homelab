@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "syncthing.fullname" . }}
+  labels:
+    {{- include "syncthing.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  {{- with .Values.deploymentStrategy }}
+  strategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "syncthing.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "syncthing.selectorLabels" . | nindent 8 }}
+    spec:
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: syncthing
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http-ui
+              containerPort: {{ .Values.service.ports.webUI }}
+              protocol: TCP
+            - name: sync-tcp
+              containerPort: {{ .Values.service.ports.syncTCP }}
+              protocol: TCP
+            - name: sync-udp
+              containerPort: {{ .Values.service.ports.syncUDP }}
+              protocol: UDP
+            - name: discovery
+              containerPort: {{ .Values.service.ports.discovery }}
+              protocol: UDP
+          env:
+            - name: TZ
+              value: "{{ .Values.env.TZ }}"
+            - name: PUID
+              value: "{{ .Values.env.PUID }}"
+            - name: PGID
+              value: "{{ .Values.env.PGID }}"
+          volumeMounts:
+            - name: config-volume
+              mountPath: {{ .Values.persistence.config.mountPath }}
+            - name: music-volume
+              mountPath: {{ .Values.persistence.music.mountPath }}
+              readOnly: {{ .Values.persistence.music.readOnly }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: config-volume
+          persistentVolumeClaim:
+            claimName: {{ include "syncthing.fullname" . }}-config-pvc
+        - name: music-volume
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.music.existingClaim }}

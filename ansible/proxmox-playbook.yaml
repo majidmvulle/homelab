@@ -1,0 +1,19 @@
+---
+- name: Prepare Proxmox host planning baseline
+  hosts: proxmox_hosts
+  roles:
+    - role: proxmox_prep
+
+- name: Validate OPNsense planning variables
+  hosts: localhost
+  gather_facts: false
+  connection: local
+  vars:
+    opnsense_mode: "{{ hostvars[groups['opnsense'][0]]['opnsense_mode'] }}"
+    opnsense_management_interface: "{{ hostvars[groups['opnsense'][0]]['opnsense_management_interface'] }}"
+    opnsense_lan_parent_interface: "{{ hostvars[groups['opnsense'][0]]['opnsense_lan_parent_interface'] }}"
+    opnsense_wan_parent_interface: "{{ hostvars[groups['opnsense'][0]]['opnsense_wan_parent_interface'] }}"
+    opnsense_dns_stack: "{{ hostvars[groups['opnsense'][0]]['opnsense_dns_stack'] }}"
+    opnsense_vlans: "{{ hostvars[groups['opnsense'][0]]['opnsense_vlans'] }}"
+  roles:
+    - role: opnsense_scaffold

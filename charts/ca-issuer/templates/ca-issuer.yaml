@@ -1,0 +1,36 @@
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: ca-secret
+  namespace: cert-manager
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: cluster-k8s-store
+    kind: ClusterSecretStore
+  target:
+    name: ca-secret
+    creationPolicy: Orphan
+    template:
+      type: kubernetes.io/tls
+  data:
+    - secretKey: tls.crt
+      remoteRef:
+        key: homelab-ca-secret
+        property: tls.crt
+    - secretKey: tls.key
+      remoteRef:
+        key: homelab-ca-secret
+        property: tls.key
+    - secretKey: ca.crt
+      remoteRef:
+        key: homelab-ca-secret
+        property: ca.crt
+---
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: ca-issuer
+spec:
+  ca:
+    secretName: ca-secret

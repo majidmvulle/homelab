@@ -1,0 +1,91 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Release.Name }}-prereq-check
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Release.Name }}-prereq-check
+  namespace: external-secrets-vault
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["homelab-ca-secret"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Release.Name }}-prereq-check
+  namespace: external-secrets-vault
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ .Release.Name }}-prereq-check
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Release.Name }}-prereq-check
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-prereq-check
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      serviceAccountName: {{ .Release.Name }}-prereq-check
+      restartPolicy: Never
+      containers:
+        - name: check-source-secret
+          image: busybox:1.36.1
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+
+              TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+              URL="https://kubernetes.default.svc/api/v1/namespaces/external-secrets-vault/secrets/homelab-ca-secret"
+
+              echo "Checking external-secrets-vault/homelab-ca-secret..."
+              RESPONSE=$(wget --header "Authorization: Bearer $TOKEN" --no-check-certificate -O- "$URL" 2>/dev/null || true)
+
+              if [ -z "$RESPONSE" ]; then
+                echo "Missing required source secret: external-secrets-vault/homelab-ca-secret"
+                exit 1
+              fi
+
+              echo "$RESPONSE" | grep -q '"tls.crt"' || {
+                echo "Missing tls.crt in external-secrets-vault/homelab-ca-secret"
+                exit 1
+              }
+
+              echo "$RESPONSE" | grep -q '"tls.key"' || {
+                echo "Missing tls.key in external-secrets-vault/homelab-ca-secret"
+                exit 1
+              }
+
+              echo "$RESPONSE" | grep -q '"ca.crt"' || {
+                echo "Missing ca.crt in external-secrets-vault/homelab-ca-secret"
+                exit 1
+              }
+
+              echo "Source secret is present and contains tls.crt, tls.key, and ca.crt"

@@ -1,0 +1,82 @@
+image:
+  repository: linuxserver/sonarr
+  tag: ""
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+deploymentStrategy: {}
+fullnameOverride: "sonarr"
+nameOverride: ""
+
+sonarr:
+  port: 8989
+
+env:
+  TZ: "Asia/Dubai"
+  PUID: "1000"
+  PGID: "1000"
+
+service:
+  type: ClusterIP
+  port: 8989
+
+ingress:
+  enabled: false
+  ingressClassName: traefik
+  host: sonarr.homelab.internal
+  annotations: {}
+  tls:
+    enabled: true
+
+persistence:
+  config:
+    storageClass: "longhorn-persistent"
+    accessMode: ReadWriteOnce
+    size: 5Gi
+    mountPath: /config
+    annotations:
+      helm.sh/resource-policy: keep
+      argocd.argoproj.io/sync-options: Prune=false
+
+  media:
+    accessMode: ReadWriteMany
+    size: 50Gi
+    mountPath: /data/media
+    annotations:
+      # Prevent Helm uninstall from deleting this PVC
+      helm.sh/resource-policy: keep
+      # Prevent Argo CD from pruning/deleting this PVC
+      argocd.argoproj.io/sync-options: Prune=false
+    nfs:
+      path: /volume1/k3s/data/videos/tvshows
+      server: synology01.homelab.internal
+      readOnly: false
+
+  downloads:
+    accessMode: ReadWriteMany
+    size: 50Gi
+    mountPath: /data/downloads
+    annotations:
+      # Prevent Helm uninstall from deleting this PVC
+      helm.sh/resource-policy: keep
+      # Prevent Argo CD from pruning/deleting this PVC
+      argocd.argoproj.io/sync-options: Prune=false
+    nfs:
+      path: /volume1/k3s/data/downloads
+      server: synology01.homelab.internal
+      readOnly: false
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 400m
+    memory: 512Mi
+
+securityContext: # Container-level security context
+  runAsUser: 1000
+  runAsGroup: 1000
+
+podSecurityContext: # Pod-level security context
+  fsGroup: 1000

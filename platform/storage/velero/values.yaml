@@ -1,0 +1,55 @@
+velero:
+  fullnameOverride: velero
+  snapshotsEnabled: false
+  initContainers:
+    - name: velero-plugin-for-aws
+      image: velero/velero-plugin-for-aws:v1.14.4
+      imagePullPolicy: IfNotPresent
+      volumeMounts:
+        - mountPath: /target
+          name: plugins
+  configuration:
+    defaultVolumesToFsBackup: true
+    clientQPS: 100
+    clientBurst: 200
+    extraEnvVars:
+      - name: AWS_CA_BUNDLE
+        value: /credentials/ca.crt
+      - name: SSL_CERT_FILE
+        value: /credentials/ca.crt
+    backupStorageLocation:
+      - name: default
+        provider: aws
+        bucket: velero-backups
+        config:
+          region: garage
+          s3ForcePathStyle: "true"
+          # Keep the Garage hostname, but use the native S3 API port directly
+          # to avoid reverse-proxy 504 HTML responses during multipart upload
+          # and ListObjectsV2 validation calls.
+          s3Url: http://s3.homelab.internal:3900
+  credentials:
+    existingSecret: velero-cloud-credentials
+    useSecret: true
+  deployNodeAgent: true
+  schedules:
+    daily:
+      schedule: "0 2 * * *"
+      template:
+        ttl: 720h
+        includedNamespaces:
+          - "*"
+        includedResources:
+          - "*"
+        storageLocation: default
+    weekly:
+      schedule: "0 3 * * 0"
+      template:
+        ttl: 1248h
+        includedNamespaces:
+          - "*"
+        includedResources:
+          - "*"
+  serviceAccount:
+    create: true
+    name: velero

@@ -1,0 +1,86 @@
+# System settings
+homelab_domain: "homelab.internal"
+legacy_flat_lan_subnet: "10.0.0.0/24"
+legacy_flat_lan_gateway: "10.0.0.1"
+legacy_flat_lan_dns_servers:
+  - "10.0.0.1"
+
+planned_vlan_networks:
+  management:
+    vlan_id: 10
+    subnet: "10.10.10.0/24"
+    gateway: "10.10.10.1"
+  servers:
+    vlan_id: 20
+    subnet: "10.10.20.0/24"
+    gateway: "10.10.20.1"
+  kubernetes:
+    vlan_id: 30
+    subnet: "10.10.30.0/24"
+    gateway: "10.10.30.1"
+  clients:
+    vlan_id: 40
+    subnet: "10.10.40.0/24"
+    gateway: "10.10.40.1"
+  iot:
+    vlan_id: 50
+    subnet: "10.10.50.0/24"
+    gateway: "10.10.50.1"
+
+debian_release_name: "bookworm"
+
+required_pg_locales:
+  - "en_GB.UTF-8"
+  - "en_US.UTF-8"
+
+# Keepalived settings (k3s)
+keepalived_vip: "10.0.0.2"
+keepalived_interface: "eno1"
+keepalived_vrid: 52
+keepalived_priority_master: 101
+keepalived_priority_backup: 100
+
+# Keepalived settings (PostgreSQL)
+pg_vip_writer: "10.0.0.3"
+pg_vip_reader: "10.0.0.4"
+pg_vip_interface: "eno1"
+
+# PostgreSQL settings
+pg_version: "16"
+pgdg_release_name: "bookworm-pgdg"
+pg_user: "postgres"
+pg_group: "postgres"
+pg_data_parent_dir: "/data/postgresql" # Base directory on the 1TB drive
+pg_data_dir: "{{ pg_data_parent_dir }}/{{ pg_version }}/main"
+pg_wal_dir: "{{ pg_data_parent_dir }}/{{ pg_version }}/main_wal" # Separate WAL directory is good practice
+pg_bin_dir: "/usr/lib/postgresql/{{ pg_version }}/bin"
+pg_config_dir: "/etc/postgresql/{{ pg_version }}/main"
+pg_port: 5432
+
+# Repmgr settings
+repmgr_db: "repmgr"
+repmgr_user: "repmgr"
+repmgr_config_file: "/etc/repmgr.conf"
+repmgr_node_id_map:
+  mini01.homelab.internal: 1
+  mini02.homelab.internal: 2
+  mini03.homelab.internal: 3
+repmgr_primary_host: "{{ groups['postgres_primary'][0] }}"
+repmgr_primary_node_name: "{{ groups['postgres_primary'][0] }}"
+
+# For SSH key generation for postgres user
+postgres_ssh_key_type: "ed25519"
+postgres_ssh_key_path: "/var/lib/postgresql/.ssh/id_{{ postgres_ssh_key_type }}" # Home dir for postgres user
+
+# lm-sensors textfile exporter
+node_exporter_textfile_dir: "/var/lib/node_exporter/textfile_collector"
+hwmon_export_script_path: "/usr/local/bin/export_hwmon_metrics.sh"
+
+# Kernel/user limits to prevent fsnotify and "too many open files" issues on Kubernetes nodes
+k8s_fsnotify_limits:
+  fs.inotify.max_user_instances: 8192
+  fs.inotify.max_user_watches: 1048576
+  fs.inotify.max_queued_events: 65536
+
+k8s_nofile_soft_limit: 1048576
+k8s_nofile_hard_limit: 1048576

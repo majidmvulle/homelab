@@ -1,0 +1,27 @@
+---
+- name: Verify OPNsense VLAN scaffold variables
+  ansible.builtin.assert:
+    that:
+      - opnsense_mode is defined
+      - opnsense_management_interface is defined
+      - opnsense_lan_parent_interface is defined
+      - opnsense_wan_parent_interface is defined
+      - opnsense_dns_stack is defined
+      - opnsense_vlans is defined
+    fail_msg: "Missing required OPNsense scaffold variables."
+
+- name: Build OPNsense VLAN summary
+  ansible.builtin.set_fact:
+    opnsense_vlan_summary: "{{ opnsense_vlans | map(attribute='name') | join(', ') }}"
+  tags: [opnsense, planning]
+
+- name: Show OPNsense scaffold summary
+  ansible.builtin.debug:
+    msg:
+      - "Mode: {{ opnsense_mode }}"
+      - "LAN parent: {{ opnsense_lan_parent_interface }}"
+      - "WAN parent: {{ opnsense_wan_parent_interface }}"
+      - "Management interface: {{ opnsense_management_interface }}"
+      - "Defined VLANs: {{ opnsense_vlan_summary }}"
+      - "DNS stack: {{ opnsense_dns_stack.frontend }} -> {{ opnsense_dns_stack.local_resolver }}"
+  tags: [opnsense, planning]

@@ -1,0 +1,53 @@
+image:
+  repository: axllent/mailpit
+  tag: latest
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+service:
+  type: ClusterIP
+  httpPort: 8025
+  smtpPort: 1025
+
+ingress:
+  enabled: true
+  ingressClassName: traefik
+  host: mailpit.homelab.internal
+  annotations: {}
+  tls:
+    enabled: true
+
+smtpIngress:
+  enabled: true
+  entryPoint: mailsmtp
+
+smtpTls:
+  enabled: false
+  secretName: mailpit-smtp-tls
+  requireStartTLS: true
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 250m
+    memory: 256Mi
+
+podSecurityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  runAsNonRoot: true
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL

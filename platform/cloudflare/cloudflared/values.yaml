@@ -1,0 +1,10 @@
+cloudflare-tunnel-remote:
+  fullnameOverride: cloudflared
+  replicaCount: 2
+  image:
+    tag: "2024.8.3"
+  extraArgs:
+    - --protocol
+    - http2
+  cloudflare:
+    existingSecret: cloudflared-tunnel-secret

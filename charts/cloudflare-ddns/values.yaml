@@ -1,0 +1,31 @@
+image:
+  repository: registry.gitlab.com/gitlab-ci-utils/curl-jq
+  tag: ""
+  pullPolicy: IfNotPresent
+
+# Schedule: Run every 5 minutes
+schedule: "*/5 * * * *"
+
+# Configuration for multiple Zones and Records
+cloudflare:
+  config:
+    - zoneId: "<your-cloudflare-zone-id>"
+      records:
+        - "vpn.example.com"
+
+securityContext:
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+
+resources:
+  requests:
+    cpu: 10m
+    memory: 32Mi
+  limits:
+    cpu: 50m
+    memory: 64Mi

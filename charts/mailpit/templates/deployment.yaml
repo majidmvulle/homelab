@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "mailpit.fullname" . }}
+  labels:
+    {{- include "mailpit.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "mailpit.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "mailpit.selectorLabels" . | nindent 8 }}
+    spec:
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: mailpit
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.httpPort }}
+              protocol: TCP
+            - name: smtp
+              containerPort: {{ .Values.service.smtpPort }}
+              protocol: TCP
+          env:
+            - name: MP_UI_BIND_ADDR
+              value: "0.0.0.0:{{ .Values.service.httpPort }}"
+            - name: MP_SMTP_BIND_ADDR
+              value: "0.0.0.0:{{ .Values.service.smtpPort }}"
+            {{- if .Values.smtpTls.enabled }}
+            - name: MP_SMTP_TLS_CERT
+              value: "/certs/smtp/tls.crt"
+            - name: MP_SMTP_TLS_KEY
+              value: "/certs/smtp/tls.key"
+            - name: MP_SMTP_REQUIRE_STARTTLS
+              value: {{ ternary "true" "false" .Values.smtpTls.requireStartTLS | quote }}
+            {{- end }}
+          {{- if .Values.smtpTls.enabled }}
+          volumeMounts:
+            - name: smtp-tls
+              mountPath: /certs/smtp
+              readOnly: true
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- if .Values.smtpTls.enabled }}
+      volumes:
+        - name: smtp-tls
+          secret:
+            secretName: {{ .Values.smtpTls.secretName }}
+      {{- end }}

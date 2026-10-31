@@ -1,0 +1,50 @@
+defaultNodeDisks:
+ mini01.homelab.internal:
+   - path: "/data/longhorn"
+     allowScheduling: true
+     storageReserved: "10%"
+ mini02.homelab.internal:
+   - path: "/data/longhorn"
+     allowScheduling: true
+     storageReserved: "10%"
+ mini03.homelab.internal:
+   - path: "/data/longhorn"
+     allowScheduling: true
+     storageReserved: "10%"
+persistence:
+  defaultClass: false
+  reclaimPolicy: Retain
+  defaultClassReplicaCount: 2
+  defaultDataLocality: best-effort
+  staleReplicaTimeout: 2880
+  disableRevisionCounter: "false"
+defaultSettings:
+  autoSalvage: false
+  disableRevisionCounter: '{"v1":"false"}'
+  defaultReplicaCount: "2"
+instanceManager:
+  resources:
+    requests:
+      cpu: 150m
+      memory: 128Mi
+csi:
+  attacher:
+    resources:
+      requests:
+        cpu: 10m
+        memory: 64Mi
+  provisioner:
+    resources:
+      requests:
+        cpu: 10m
+        memory: 64Mi
+  resizer:
+    resources:
+      requests:
+        cpu: 10m
+        memory: 64Mi
+  snapshotter:
+    resources:
+      requests:
+        cpu: 10m
+        memory: 64Mi

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: lidarr
+description: A Helm chart for Lidarr (blampe/lidarr image)
+type: application
+version: 0.2.0
+appVersion: "latest"

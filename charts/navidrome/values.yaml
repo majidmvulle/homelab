@@ -1,0 +1,65 @@
+image:
+  repository: deluan/navidrome
+  tag: ""
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+deploymentStrategy: {}
+fullnameOverride: "navidrome"
+nameOverride: ""
+
+service:
+  type: ClusterIP
+  port: 4533
+  targetPort: 4533
+
+ingress:
+  enabled: false
+  ingressClassName: traefik
+  host: navidrome.homelab.internal
+  annotations: {}
+  tls:
+    enabled: true
+
+persistence:
+  config:
+    enabled: true
+    storageClass: "longhorn-persistent"
+    accessMode: ReadWriteOnce
+    size: 1Gi
+    mountPath: /data
+    annotations:
+      # Prevent Helm uninstall from deleting this PVC
+      helm.sh/resource-policy: keep
+      # Prevent Argo CD from pruning/deleting this PVC
+      argocd.argoproj.io/sync-options: Prune=false
+  music:
+    enabled: true
+    existingClaim: lidarr-media-pvc #  <--  Use Lidarr's existing PVC
+    mountPath: /data/media
+    readOnly: true
+    annotations:
+      # Prevent Helm uninstall from deleting this PVC
+      helm.sh/resource-policy: keep
+      # Prevent Argo CD from pruning/deleting this PVC
+      argocd.argoproj.io/sync-options: Prune=false
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: 2000m
+    memory: 1Gi
+
+securityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  runAsNonRoot: true
+
+podSecurityContext:
+  fsGroup: 1000
+
+env:
+  ND_MUSICFOLDER: /data/media/music
+  ND_ENABLETRANSCODINGCONFIG: false #Enables transcoding configuration in the UI

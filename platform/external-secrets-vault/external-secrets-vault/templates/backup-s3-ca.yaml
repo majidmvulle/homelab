@@ -1,0 +1,40 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: backup-s3-ca
+  namespace: external-secrets-vault
+type: Opaque
+stringData:
+  # Public CA certificate currently served by Synology for s3.homelab.internal.
+  # Keep this in Git so Velero/Longhorn trust survives secret-store drift and
+  # cluster rebuilds. Rotate only when the S3 endpoint CA actually changes.
+  ca_crt: |
+    -----BEGIN CERTIFICATE-----
+    MIIE+jCCAuKgAwIBAgIUZX72AoparwlH6TH/pzt3N4401fIwDQYJKoZIhvcNAQEN
+    BQAwFTETMBEGA1UEAxMKaG9tZWxhYi1jYTAeFw0yNjAyMTMxMzI0MDVaFw0zNjAy
+    MTExMzI0MDVaMBUxEzARBgNVBAMTCmhvbWVsYWItY2EwggIiMA0GCSqGSIb3DQEB
+    AQUAA4ICDwAwggIKAoICAQDhmmu2dzS5ZkmdJ0vaa0oht2JPM2PY+pzz8QdD64AR
+    O1R+OuzRb2GcQvBXJPd7SxoMYlSLyT89Sypjs5tjOP/8B8JxCBMX4PFiQPfAKF1I
+    qFuVjVxggTkhZgOb3018ybyAcfyWQsg3ADf6GEVhnyLilV0jTsDfjvM2IqtD/zJs
+    6tStcrZECcuWIiI3EV6Zj4u29wIhX4DOi1mRebRevHaxdSGkc4MsFNTNlQ6lDRGa
+    YnVDO1eO/i8GJwPY3EZUxjlKE/cUpy9RmPShxVQE9FG91T1q6lZv8oWpe/M46HoM
+    +JYI5p17l8ahMBzJNnCUrl67qVdve2WC5b3qKFZ82scbLZfC1sCE+Yb5Y+J4asmq
+    EMp8Y4LfzZsHNXw/Ay9le8u2hu3grbX1XLwrHLfuVyiOo6G8fJtm+B12t6o3DW+R
+    i63mmdAVZVTpt8/xADdit5+dm4eKEuoTlSYgeU1HoNrHrpHdho7cOHG9w4oAAPlD
+    x3DRMKX6DpH901Z54KVhfc9KK8ye4EEaBramTURM3Js53TqXq86cOx//vRAQyQkK
+    e+dqW8KaZVuYBMtdxkpNv8yc3cxngzrL2EkaGjID5hcurxR0WCKm7+pdm3mZMKMq
+    gTY0LIvMH11tZZTBc2eJaTEbgYZEXWYVQBv17Ja7uQR7//x0ZvNz1CFAdQ5wqMzy
+    lwIDAQABo0IwQDAOBgNVHQ8BAf8EBAMCAqQwDwYDVR0TAQH/BAUwAwEB/zAdBgNV
+    HQ4EFgQUSmjFvALhrur679YRfRpW2yPYojEwDQYJKoZIhvcNAQENBQADggIBAGxH
+    Sbki2DScYfo+5tN0uN62TdDDFnQXPHw4kUEEzx0hjoO+0zzH2dekABG/sP5L7HrX
+    9oeY/l8CA8dggjAP0M7HiVFxMo7+TjvME5BH5F9lNANM77GaOecbwsYrEY4zWwYz
+    vBpay6xB/Lg07dAi8pWf+xV/Ao5dFdnPknqqlmPrB0YWwCP8WC5MWB1wvQKm1upt
+    ZBKBHlac6ekLAdtyFw+5YgDXxhVG/NerQMMwA8HR9NI3QF0MyMeIZNqMqVbMnNdM
+    QLgf113xmYE8y666vrYvf9zyTPmRCX97Dsntr9avnIAVvwwDwZdIgSgiD5CJDzCS
+    cmx6Extkb1Vu+n1h0NUyRTMDa8J1DxhjaCwDN6lh3LAgC2k6Jb4kgyUIdNX7SXHb
+    769Pys9LZBIDmxzdhvz7R8IdQeqYGQIHkzP0s3qBJdZWo2TRyty0aQosiW9UqHx2
+    4I+Juu9An1Pc+29z7LKwCXXd1gH3SzfbW0+T9p9IQbR7x2690hpjI5AJdXzGDFRe
+    dRVNeDfRmBm2QcdYJnJHM8nsLoZvHfK4akJHEhVR1Cw1TAZTHflMNQh0IeZ8U1Ze
+    1yHTMLv7+Ee0FOF0DKvLbntYjhEWEWk+9FzjZI8U1KlzSvsEAe356B0mF9j8ZrOv
+    VVZqQfHPzQGDEgPIDvHDhQehkvUHUpoutkS9io6I
+    -----END CERTIFICATE-----

@@ -1,0 +1,17 @@
+# Enforce Unix LF line endings across all platforms
+* text=auto eol=lf
+
+# Explicit LF for shell scripts and templates
+*.sh text eol=lf
+*.bash text eol=lf
+*.j2 text eol=lf
+
+# YAML, Markdown, configuration
+*.yaml text eol=lf
+*.yml text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.ini text eol=lf
+*.cfg text eol=lf
+Makefile text eol=lf
+Dockerfile text eol=lf

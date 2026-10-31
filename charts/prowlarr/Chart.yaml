@@ -1,0 +1,7 @@
+apiVersion: v2
+name: prowlarr
+description: A Helm chart for Prowlarr (linuxserver.io image) - Indexer manager for *arr apps
+type: application
+version: 0.1.0
+appVersion: "2.3.0"
+dependencies: []

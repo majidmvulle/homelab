@@ -1,0 +1,11 @@
+---
+device_platform: hp-prodesk-600-g4
+device_cpu: intel-i5-8500t
+device_ram_gb: 16
+device_storage:
+  os: 128GB-nvme
+  data: 1TB-nvme
+network_role: kubernetes-and-postgresql
+planned_vlan: servers
+cnpg_local_pv_ids:
+  - 2

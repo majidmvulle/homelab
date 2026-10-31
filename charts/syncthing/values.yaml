@@ -1,0 +1,57 @@
+image:
+  repository: linuxserver/syncthing
+  tag: "" # Defaults to Chart.AppVersion if empty
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+deploymentStrategy: {}
+fullnameOverride: "syncthing"
+nameOverride: ""
+
+env:
+  TZ: "Asia/Dubai"
+  PUID: "1000"
+  PGID: "1000"
+
+service:
+  type: ClusterIP
+  ports:
+    webUI: 8384
+    syncTCP: 22000
+    syncUDP: 22000
+    discovery: 21027
+
+ingress:
+  enabled: false
+  ingressClassName: traefik
+  host: syncthing.homelab.internal
+  annotations: {}
+  tls:
+    enabled: true
+
+persistence:
+  config:
+    storageClass: "longhorn-persistent"
+    accessMode: ReadWriteOnce
+    size: 64Mi
+    mountPath: /config
+    annotations:
+      helm.sh/resource-policy: keep
+      argocd.argoproj.io/sync-options: Prune=false
+
+  # This is the read-only source media library from Lidarr
+  music:
+    existingClaim: "lidarr-media-pvc"
+    mountPath: /music
+    readOnly: false
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 300m
+    memory: 512Mi
+
+podSecurityContext:
+  fsGroup: 1000

@@ -1,0 +1,10 @@
+apiVersion: v2
+name: external-dns-opnsense-rfc2136
+description: ExternalDNS configured for OPNsense os-bind via RFC2136
+type: application
+version: 0.1.0
+appVersion: "0.19.0"
+dependencies:
+  - name: external-dns
+    version: 1.23.0
+    repository: https://kubernetes-sigs.github.io/external-dns/

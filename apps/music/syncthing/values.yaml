@@ -1,0 +1,35 @@
+image:
+  repository: linuxserver/syncthing
+  tag: "1.30.0"
+deploymentStrategy:
+  type: Recreate
+env:
+  TZ: "Asia/Dubai"
+  PUID: "1000"
+  PGID: "1000"
+service:
+  type: ClusterIP
+  ports:
+    webUI: 8384
+    syncTCP: 22000
+    syncUDP: 22000
+    discovery: 21027
+ingress:
+  enabled: true
+  host: syncthing.homelab.internal
+persistence:
+  config:
+    storageClass: "longhorn-persistent"
+    size: 2Gi
+  music:
+    existingClaim: "lidarr-media-pvc"
+    readOnly: false
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 300m
+    memory: 512Mi
+podSecurityContext:
+  fsGroup: 1000

@@ -1,0 +1,7 @@
+apiVersion: v2
+name: jellyfin
+description: A Helm chart for Jellyfin (linuxserver.io image)
+type: application
+version: 0.1.0
+appVersion: "10.10.7"
+dependencies: []

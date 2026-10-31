@@ -1,0 +1,6 @@
+apiVersion: v2
+name: postgres-cluster
+description: A Helm chart for EDB/CNPG Postgres Cluster
+type: application
+version: 0.1.2
+appVersion: "16.2"

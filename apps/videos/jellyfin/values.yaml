@@ -1,0 +1,39 @@
+image:
+  repository: linuxserver/jellyfin
+  tag: "10.11.11"
+deploymentStrategy:
+  type: Recreate
+env:
+  TZ: "Asia/Dubai"
+  PUID: "1000"
+  PGID: "1000"
+  JELLYFIN_PublishedServerUrl: "https://jellyfin.homelab.internal"
+service:
+  type: ClusterIP
+  port: 8096
+  targetPort: 8096
+ingress:
+  enabled: true
+  host: jellyfin.homelab.internal
+persistence:
+  config:
+    storageClass: "longhorn-persistent"
+    size: 5Gi
+  media:
+    existingClaim: media-videos-nfs-pvc
+hardwareAcceleration:
+  enabled: true
+  driDevicePath: /dev/dri
+  renderGid: 105
+  videoGid: 44
+resources:
+  requests:
+    cpu: "1"
+    memory: 1536Mi
+    gpu.intel.com/i915: "1"
+  limits:
+    cpu: "3"
+    memory: 3Gi
+    gpu.intel.com/i915: "1"
+podSecurityContext:
+  fsGroup: 1000

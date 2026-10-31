@@ -1,0 +1,11 @@
+HAProxy has been deployed.
+
+To get the LoadBalancer IP/hostname, run:
+
+  kubectl get service {{ include "haproxy.fullname" . }} --namespace {{ .Release.Namespace }} -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+
+Or if using hostname:
+
+  kubectl get service {{ include "haproxy.fullname" . }} --namespace {{ .Release.Namespace }} -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'
+
+You will need to configure your Cloudflare Tunnel ingress to point to this IP/hostname on port {{ .Values.service.port }}.

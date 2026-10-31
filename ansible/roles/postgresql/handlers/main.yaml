@@ -1,0 +1,27 @@
+- name: Generate locales
+  ansible.builtin.command: locale-gen
+  changed_when: true
+  listen: "Generate locales"
+
+- name: Restart postgresql on primary
+  ansible.builtin.systemd:
+    name: "postgresql@{{ pg_version }}-main.service"
+    state: restarted
+    enabled: yes
+  when: inventory_hostname in groups['postgres_primary']
+  listen: "Restart postgresql on primary"
+
+- name: Ensure postgresql on standby is enabled but stopped
+  ansible.builtin.systemd:
+    name: "postgresql@{{ pg_version }}-main.service"
+    enabled: yes
+    state: stopped
+  when: inventory_hostname in groups['postgres_standbys']
+  listen: "Ensure postgresql on standby is enabled but stopped"
+
+- name: Reload postgresql on primary
+  ansible.builtin.systemd:
+    name: "postgresql@{{ pg_version }}-main.service"
+    state: reloaded
+  when: inventory_hostname in groups['postgres_primary']
+  listen: "Reload postgresql on primary"

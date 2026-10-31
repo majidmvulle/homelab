@@ -1,0 +1,9 @@
+ingress:
+  host: mailpit.homelab.internal
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: mailpit.homelab.internal
+
+smtpTls:
+  enabled: true
+  secretName: mailpit-smtp-tls
+  requireStartTLS: true

@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "haproxy.fullname" . }}-config
+  labels:
+    {{- include "haproxy.labels" . | nindent 4 }}
+data:
+  haproxy.cfg.tmpl: |
+    {{- tpl .Values.config.global . | nindent 4 }}
+    {{- tpl .Values.config.defaults . | nindent 4 }}
+    {{- tpl .Values.config.frontend . | nindent 4 }}
+    {{- range .Values.config.backends }}
+    backend {{ .name }}
+      {{- if .config }}
+      {{- tpl .config $ | nindent 6 }}
+      {{- else }}
+      balance roundrobin
+      {{- range .servers }}
+      server {{ .name }} {{ .address }}:{{ .port }} check
+      {{- end }}
+      {{- end }}
+    {{- end }}

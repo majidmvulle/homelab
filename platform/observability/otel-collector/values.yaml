@@ -1,0 +1,51 @@
+opentelemetry-collector:
+  mode: "deployment"
+  image:
+    repository: otel/opentelemetry-collector-contrib
+  config:
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: "0.0.0.0:4317"
+          http:
+            endpoint: "0.0.0.0:4318"
+    processors:
+      batch: {}
+      filter/health_checks:
+        error_mode: ignore
+        traces:
+          span:
+            - 'attributes["rpc.service"] == "grpc.health.v1.Health"'
+            - 'IsMatch(attributes["http.target"], "^/(_)?health(z)?$")'
+            - 'IsMatch(attributes["url.path"], "^/(_)?health(z)?$")'
+    exporters:
+      otlp/signoz:
+        endpoint: signoz-otel-collector.observability.svc.cluster.local:4317
+        tls:
+          insecure: true
+    service:
+      telemetry:
+        logs:
+          level: "info"
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [filter/health_checks, batch]
+          exporters: [otlp/signoz]
+        metrics:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [otlp/signoz]
+        logs:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [otlp/signoz]
+  ports:
+    metrics:
+      enabled: true
+  service:
+    annotations:
+      prometheus.io/scrape: "true"
+      prometheus.io/port: "8888"
+      prometheus.io/path: "/metrics"

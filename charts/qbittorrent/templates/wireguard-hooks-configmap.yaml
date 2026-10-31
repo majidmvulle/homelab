@@ -1,0 +1,23 @@
+{{- if and .Values.wireguard.enabled .Values.wireguard.cleanupStaleLanRoute }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "qbittorrent.fullname" . }}-wireguard-hooks
+  labels:
+    {{- include "qbittorrent.labels" . | nindent 4 }}
+data:
+  {{ .Values.wireguard.configFileName }}-pre.sh: |
+    #!/bin/sh
+    # Kubernetes preserves a pod's network namespace across container restarts.
+    # Remove the LAN bypass route that a previous interrupted VPN setup left
+    # behind so Hotio can add it again during WireGuard initialization.
+    previous_ifs="$IFS"
+    IFS=','
+    for network in ${VPN_LAN_NETWORK:-}; do
+      [ -n "$network" ] || continue
+      if ip route show "$network" | grep -q ' via '; then
+        ip route del "$network" 2>/dev/null || true
+      fi
+    done
+    IFS="$previous_ifs"
+{{- end }}

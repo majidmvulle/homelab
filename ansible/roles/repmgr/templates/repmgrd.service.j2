@@ -1,0 +1,21 @@
+[Unit]
+Description=repmgrd for PostgreSQL {{ pg_version }}
+After=syslog.target network.target postgresql@{{ pg_version }}-main.service
+
+[Service]
+Type=forking
+User={{ pg_user }}
+Group={{ pg_group }}
+
+# Systemd needs to know where the PID file is to track the process
+PIDFile=/tmp/repmgrd.pid
+
+# Start command with --daemonize
+ExecStart={{ pg_bin_dir }}/repmgrd -f {{ repmgr_config_file }} --daemonize --pid-file=/tmp/repmgrd.pid --log-level=INFO --monitoring-history --verbose
+
+# Restart automatically if it crashes
+Restart=always
+RestartSec=10s
+
+[Install]
+WantedBy=multi-user.target

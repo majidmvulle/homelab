@@ -1,0 +1,12 @@
+global:
+  storageClass: longhorn-persistent
+clickhouse:
+  persistence:
+    enabled: true
+    size: 20Gi
+signoz:
+  persistence:
+    enabled: true
+    size: 1Gi
+  service:
+    type: LoadBalancer

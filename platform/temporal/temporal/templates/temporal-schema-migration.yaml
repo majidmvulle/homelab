@@ -1,0 +1,97 @@
+{{- /*
+The upstream Temporal 0.74 chart's schema Job uses .Release.Revision in its
+name. Argo CD renders that revision as 1 on every reconciliation, preventing
+the Job's immutable pod template from being updated. Run the required schema
+migration as an Argo CD hook instead.
+*/ -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: temporal-schema-migration
+  labels:
+    app.kubernetes.io/component: database
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: temporal
+    app.kubernetes.io/part-of: temporal
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  activeDeadlineSeconds: 1800
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: database
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/name: temporal
+        app.kubernetes.io/part-of: temporal
+    spec:
+      restartPolicy: OnFailure
+      initContainers:
+        - name: update-default-store
+          image: "temporalio/admin-tools:{{ .Values.temporal.server.image.tag }}"
+          imagePullPolicy: IfNotPresent
+          command:
+            - temporal-sql-tool
+            - update-schema
+            - --schema-dir
+            - /etc/temporal/schema/postgresql/v12/temporal/versioned
+          env:
+            - name: SQL_PLUGIN
+              value: {{ .Values.temporal.server.config.persistence.default.sql.driver | quote }}
+            - name: SQL_HOST
+              value: {{ .Values.temporal.server.config.persistence.default.sql.host | quote }}
+            - name: SQL_PORT
+              value: {{ .Values.temporal.server.config.persistence.default.sql.port | quote }}
+            - name: SQL_DATABASE
+              value: {{ .Values.temporal.server.config.persistence.default.sql.database | quote }}
+            - name: SQL_USER
+              value: {{ .Values.temporal.server.config.persistence.default.sql.user | quote }}
+            - name: SQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.temporal.server.config.persistence.default.sql.existingSecret }}
+                  key: password
+            - name: SQL_TLS
+              value: {{ .Values.temporal.server.config.persistence.default.sql.tls.enabled | quote }}
+            - name: SQL_TLS_DISABLE_HOST_VERIFICATION
+              value: {{ not .Values.temporal.server.config.persistence.default.sql.tls.enableHostVerification | quote }}
+        - name: update-visibility-store
+          image: "temporalio/admin-tools:{{ .Values.temporal.server.image.tag }}"
+          imagePullPolicy: IfNotPresent
+          command:
+            - temporal-sql-tool
+            - update-schema
+            - --schema-dir
+            - /etc/temporal/schema/postgresql/v12/visibility/versioned
+          env:
+            - name: SQL_PLUGIN
+              value: {{ .Values.temporal.server.config.persistence.visibility.sql.driver | quote }}
+            - name: SQL_HOST
+              value: {{ .Values.temporal.server.config.persistence.visibility.sql.host | quote }}
+            - name: SQL_PORT
+              value: {{ .Values.temporal.server.config.persistence.visibility.sql.port | quote }}
+            - name: SQL_DATABASE
+              value: {{ .Values.temporal.server.config.persistence.visibility.sql.database | quote }}
+            - name: SQL_USER
+              value: {{ .Values.temporal.server.config.persistence.visibility.sql.user | quote }}
+            - name: SQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.temporal.server.config.persistence.visibility.sql.existingSecret }}
+                  key: password
+            - name: SQL_TLS
+              value: {{ .Values.temporal.server.config.persistence.visibility.sql.tls.enabled | quote }}
+            - name: SQL_TLS_DISABLE_HOST_VERIFICATION
+              value: {{ not .Values.temporal.server.config.persistence.visibility.sql.tls.enableHostVerification | quote }}
+      containers:
+        - name: complete
+          image: "temporalio/admin-tools:{{ .Values.temporal.server.image.tag }}"
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - echo 'Temporal schema migration completed'

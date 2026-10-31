@@ -1,0 +1,114 @@
+# -- qBittorrent image settings
+image:
+  repository: ghcr.io/hotio/qbittorrent
+  tag: "" # uses appVersion from Chart.yaml
+  pullPolicy: IfNotPresent
+
+# -- Init container image settings
+initImage:
+  repository: busybox
+  tag: 1.38.0
+  pullPolicy: IfNotPresent
+
+fullnameOverride: "qbittorrent"
+nameOverride: ""
+replicaCount: 1
+deploymentStrategy: {}
+
+# -- User and group identifiers
+podSecurityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  sysctls:
+    - name: net.ipv4.conf.all.src_valid_mark
+      value: "1"
+    - name: net.ipv6.conf.all.disable_ipv6
+      value: "1"
+
+env:
+  TZ: Etc/UTC
+  PUID: 1000
+  PGID: 1000
+  UMASK: "002"
+  WEBUI_PORTS: "8080/tcp,8080/udp"
+
+# -- qBittorrent service settings (ClusterIP for Ingress)
+service:
+  type: ClusterIP
+  port: 8080
+  targetPort: 8080
+  annotations: {}
+
+ingress:
+  enabled: false
+  ingressClassName: traefik
+  host: torrent.homelab.internal
+  annotations: {}
+  tls:
+    enabled: true
+
+# -- Wireguard VPN settings
+wireguard:
+  enabled: true
+  configMapName: ""
+  configFileName: wg0 # the .conf will be appended by hotio/qbittorrent, otherwise, it ends up being wg0.conf.conf
+  # Remove the LAN bypass route left in the pod network namespace by an
+  # interrupted WireGuard shutdown before Hotio initializes WireGuard again.
+  cleanupStaleLanRoute: true
+  vpnProvider: generic
+  vpnLanNetwork: ""
+  vpnLanLeakEnabled: "false"
+  vpnExposePortsOnLan: ""
+  vpnAutoPortForward: "false"
+  vpnAutoPortForwardToPorts: ""
+  vpnKeepLocalDns: "false"
+  vpnFirewallType: "auto"
+  vpnHealthcheckEnabled: "false"
+  # Possible values are wg, 8.8.8.8 or 1.1.1.1@853#cloudflare-dns.com seperated by a ,.
+  # The value wg will use the nameservers from the wg0.conf file.
+  # The value 8.8.8.8 is to use a plain old nameserver.
+  # The value 1.1.1.1@853#cloudflare-dns.com will add a DNS over TLS nameserver, this will override all other regular nameservers.
+  # Leaving the variable empty will allow Unbound to work in recursive mode.
+  vpnNameServers: "wg"
+  privoxyEnabled: "false"
+  unboundEnabled: "false"
+
+# -- Persistent volume configuration
+persistence:
+  config:
+    accessMode: ReadWriteOnce
+    size: 5Gi
+    storageClass: ""
+    mountPath: /config
+    annotations:
+      # Prevent Helm uninstall from deleting this PVC
+      helm.sh/resource-policy: keep
+      # Prevent Argo CD from pruning/deleting this PVC
+      argocd.argoproj.io/sync-options: Prune=false
+  downloads:
+    accessMode: ReadWriteMany
+    size: 200Gi
+    # Change the settings in the UI to put downloads in this directory
+    # Tools > Options > Downloads > Default Save Path: /data/downloads/qbittorrent
+    # Also check, and set the value "Keep incomplete torrents in: /data/downloads/qbittorrent/temp"
+    # Click "Save" at the bottom
+    mountPath: /data/downloads/qbittorrent
+    annotations:
+      # Prevent Helm uninstall from deleting this PVC
+      helm.sh/resource-policy: keep
+      # Prevent Argo CD from pruning/deleting this PVC
+      argocd.argoproj.io/sync-options: Prune=false
+    nfs:
+      path: ""
+      server: ""
+      readOnly: false
+
+# -- Resource limits and requests
+resources:
+  requests:
+    cpu: 50m
+    memory: 512Mi
+  limits:
+    cpu: 300m
+    memory: 768Mi

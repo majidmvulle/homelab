@@ -1,0 +1,111 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: platform
+  namespace: argocd
+spec:
+  goTemplate: true
+  generators:
+    - git:
+        repoURL: https://github.com/majidmvulle/homelab.git
+        revision: HEAD
+        files:
+          - path: "platform/*/*/app.yaml"
+
+  template:
+    metadata:
+      name: '{{ index .path.segments 2 }}'
+      labels:
+        app.kubernetes.io/part-of: platform
+    spec:
+      project: default
+
+      sources:
+        # ==========================================================
+        # SOURCE 1: THE LOGIC (Dynamic Polyglot Source)
+        # This single source block adapts to be either OCI or Git
+        # by dynamically setting fields to empty strings based on .type
+        # ==========================================================
+        - helm:
+            valueFiles:
+              # Always read values from Source 2 (The Git Repo)
+              - '$app-source/{{ .path.path }}/values.yaml'
+
+          # 1. Repo URL Logic
+          # If OCI: Use the registry URL from app.yaml (e.g., ghcr.io/...)
+          # If Git: Use the Monorepo URL
+          repoURL: '{{ if eq .type "oci" }}{{ .repoURL }}{{ else }}https://github.com/majidmvulle/homelab.git{{ end }}'
+
+          # 2. Revision Logic
+          # If OCI: Use the specific version from app.yaml
+          # If Git: Use HEAD
+          targetRevision: '{{ if eq .type "oci" }}{{ .version }}{{ else }}HEAD{{ end }}'
+
+          # 3. Chart Logic (For OCI)
+          # If OCI: Output the chart name
+          # If Git: Output NOTHING (empty string). ArgoCD ignores empty chart fields.
+          chart: '{{ if eq .type "oci" }}{{ .chart }}{{ end }}'
+
+          # 4. Path Logic (For Git)
+          # If OCI: Output NOTHING (empty string).
+          # If Remote (Wrapper): Use the app folder path (contains Chart.yaml).
+          # If Local (Shared): Use the charts/ folder path.
+          path: '{{ if eq .type "oci" }}{{ else }}{{ if eq .type "remote" }}{{ .path.path }}{{ else }}charts/{{ .chart }}{{ end }}{{ end }}'
+
+        # ==========================================================
+        # SOURCE 2: RAW MANIFESTS & CONFIG (Static)
+        # This provides the values.yaml reference and applies ESOP/Raw manifests
+        # ==========================================================
+        - repoURL: https://github.com/majidmvulle/homelab.git
+          targetRevision: HEAD
+          ref: app-source
+          path: '{{ .path.path }}'
+          directory:
+            # Exclude config files AND templates to prevent duplication
+            exclude: '{app.yaml,values.yaml,Chart.yaml,Chart.lock,templates/*}'
+
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{ index .path.segments 1 }}'
+
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
+
+      ignoreDifferences:
+        - group: kyverno.io
+          kind: ClusterPolicy
+          jqPathExpressions:
+            - .spec.rules[].skipBackgroundRequests
+        - group: kyverno.io
+          kind: Policy
+          jqPathExpressions:
+            - .spec.rules[].skipBackgroundRequests
+        - group: external-secrets.io
+          kind: ExternalSecret
+          jqPathExpressions:
+            - .spec.data[].remoteRef.conversionStrategy
+            - .spec.data[].remoteRef.decodingStrategy
+            - .spec.data[].remoteRef.metadataPolicy
+            - .spec.dataFrom[].extract.conversionStrategy
+            - .spec.dataFrom[].extract.decodingStrategy
+            - .spec.dataFrom[].extract.metadataPolicy
+            - .spec.target.template.engineVersion
+            - .spec.target.template.mergePolicy
+        - group: apps
+          kind: Deployment
+          name: signoz-clickhouse-operator
+          namespace: observability
+          jqPathExpressions:
+            # Ignore the 'divisor' field in all environment variables for all containers
+            - .spec.template.spec.containers[].env[].valueFrom.resourceFieldRef.divisor
+        - group: apps
+          kind: StatefulSet
+          # Apply to all StatefulSets in this app (signoz, zookeeper, etc.)
+          jsonPointers:
+            - /spec/volumeClaimTemplates/0/apiVersion
+            - /spec/volumeClaimTemplates/0/kind

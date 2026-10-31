@@ -1,0 +1,29 @@
+# -- FlareSolverr image settings
+image:
+  repository: ghcr.io/flaresolverr/flaresolverr
+  tag: "v3.5.2"
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+# -- Service settings (ClusterIP is sufficient)
+service:
+  type: ClusterIP  # FlareSolverr only needs to be accessible within the cluster
+  port: 8191
+  targetPort: 8191
+
+# -- Environment variables
+env:
+  LOG_LEVEL: error  # Can be info, warn, error, debug
+  LOG_HTML: false
+  CAPTCHA_SOLVER: ""
+  TZ: "Asia/Dubai"
+
+# -- Resource limits and requests.
+resources:
+  limits:
+    cpu: "200m"
+    memory: "512Mi"
+  requests:
+    cpu: "50m"
+    memory: "128Mi"

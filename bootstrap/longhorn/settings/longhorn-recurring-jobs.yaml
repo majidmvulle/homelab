@@ -1,0 +1,18 @@
+apiVersion: longhorn.io/v1beta2
+kind: RecurringJob
+metadata:
+  name: backup-daily-0300
+  namespace: longhorn-system
+spec:
+  name: backup-daily-0300
+  cron: "0 3 * * *"
+  task: backup
+  retain: 1
+  concurrency: 2
+  # Attach to Longhorn's implicit default group so volumes without
+  # explicit selectors are included. NFS-backed PVCs are unaffected.
+  groups:
+    - default
+  labels: {}
+  parameters:
+    full-backup-interval: "29"

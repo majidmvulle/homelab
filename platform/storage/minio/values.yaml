@@ -1,0 +1,61 @@
+minio:
+  mode: standalone
+  replicas: 1
+
+  requestedSize: 50Gi
+
+  drivesPerNode: 1
+
+  persistence:
+    enabled: true
+    storageClass: "longhorn-persistent"
+    size: 50Gi
+
+  existingSecret: "minio-secrets"
+
+  buckets:
+    - name: postgres-main-backups
+      policy: none
+      purge: false
+
+  consoleService:
+    type: ClusterIP
+    ports:
+      console: 9001
+
+  consoleIngress:
+    enabled: true
+    ingressClassName: traefik
+    hosts:
+      - minio.homelab.internal
+    path: /
+    pathType: Prefix
+    tls:
+      - hosts:
+          - minio.homelab.internal
+    annotations:
+      external-dns.alpha.kubernetes.io/hostname: minio.homelab.internal
+      traefik.ingress.kubernetes.io/router.entrypoints: minioconsole
+
+  ingress:
+    enabled: true
+    ingressClassName: traefik
+    hosts:
+      - minio.homelab.internal
+    path: /
+    pathType: Prefix
+    tls:
+      - hosts:
+          - minio.homelab.internal
+    annotations:
+      external-dns.alpha.kubernetes.io/hostname: minio.homelab.internal
+      traefik.ingress.kubernetes.io/router.entrypoints: minioapi
+
+  service:
+    type: ClusterIP
+    ports:
+      api: 9000
+
+  resources:
+    requests:
+      memory: 512Mi

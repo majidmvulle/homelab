@@ -1,0 +1,35 @@
+image:
+  repository: deluan/navidrome
+  tag: "0.64.2"
+deploymentStrategy:
+  type: Recreate
+service:
+  type: ClusterIP
+  port: 4533
+  targetPort: 4533
+ingress:
+  enabled: true
+  host: navidrome.homelab.internal
+persistence:
+  config:
+    storageClass: "longhorn-persistent"
+    size: 1Gi
+  music:
+    existingClaim: lidarr-media-pvc
+    readOnly: true
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: 2000m
+    memory: 1Gi
+securityContext:
+  runAsUser: 1000
+  runAsGroup: 1000
+  runAsNonRoot: true
+podSecurityContext:
+  fsGroup: 1000
+env:
+  ND_MUSICFOLDER: /data/media/music
+  ND_ENABLETRANSCODINGCONFIG: false

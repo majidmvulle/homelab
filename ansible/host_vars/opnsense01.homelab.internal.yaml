@@ -1,0 +1,7 @@
+---
+network_role: edge-firewall
+planned_vlan: management
+dns_role:
+  current_target: adguard-home
+  local_authority: unbound
+remote_access_role: wireguard

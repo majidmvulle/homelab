@@ -1,0 +1,49 @@
+- name: Install Keepalived package
+  ansible.builtin.apt:
+    name: keepalived
+    state: present
+  tags: [keepalived, packages]
+
+- name: Ensure Keepalived configuration directory exists
+  ansible.builtin.file:
+    path: /etc/keepalived/conf.d
+    state: directory
+    mode: '0755'
+  tags: [keepalived, config]
+
+- name: Template Main Keepalived configuration (Global + Include)
+  ansible.builtin.template:
+    src: keepalived_master.conf.j2
+    dest: /etc/keepalived/keepalived.conf
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Restart keepalived
+  tags: [keepalived, config]
+
+- name: Template K3s VRRP configuration
+  ansible.builtin.template:
+    src: keepalived_k3s.conf.j2
+    dest: /etc/keepalived/conf.d/k3s.conf
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Restart keepalived
+  tags: [keepalived, config]
+
+- name: Template K3s API health check script
+  ansible.builtin.template:
+    src: check_k3s_api.sh.j2
+    dest: /usr/local/bin/check_k3s_api.sh
+    owner: root
+    group: root
+    mode: '0755'
+  notify: Restart keepalived
+  tags: [keepalived, config]
+
+- name: Ensure Keepalived service is started and enabled
+  ansible.builtin.systemd:
+    name: keepalived
+    state: started
+    enabled: yes
+  tags: [keepalived, service]

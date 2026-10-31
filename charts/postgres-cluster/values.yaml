@@ -1,0 +1,104 @@
+# Options: "postgresql.cnpg.io" (Community) or "postgresql.k8s.enterprisedb.io" (EDB)
+apiGroup: "postgresql.cnpg.io"
+
+fullnameOverride: "postgres-main"
+nameOverride: ""
+
+instances: 3
+primaryUpdateStrategy: unsupervised
+
+image:
+  repository: ghcr.io/majidmvulle/homelab-infra/postgres-custom
+  tag: "17-v0.0.1"
+  pullSecret: "ghcr-secret"
+
+ghcrSecret:
+  registry: "ghcr.io"
+  sourceKey: "argocd-repo-ghcr-majidmvulle-repo-secret"
+  usernameProperty: "username"
+  passwordProperty: "password"
+
+postgresql:
+  # These libraries must be loaded at startup
+  # timescaledb: Must be first
+  # pg_stat_statements: For performance monitoring
+  # pgaudit: For auditing
+  # vector: For AI/ML (optional to preload, but good practice)
+  shared_preload_libraries:
+    - timescaledb
+    - pg_stat_statements
+    - pgaudit
+    - vector
+  parameters:
+    max_connections: "300"
+    shared_buffers: "1GB"
+    random_page_cost: "1.1"
+
+bootstrap:
+  database: db_homelab
+  owner: user_homelab
+  # SQL to run when the DB is first created
+  postInitTemplateSQL:
+    # 1. TimescaleDB
+    - CREATE EXTENSION IF NOT EXISTS timescaledb;
+    # 2. PostGIS (Geospatial)
+    - CREATE EXTENSION IF NOT EXISTS postgis;
+    - CREATE EXTENSION IF NOT EXISTS postgis_topology;
+    # 3. AI/ML
+    - CREATE EXTENSION IF NOT EXISTS vector;
+    # 4. Text Search & Crypto
+    - CREATE EXTENSION IF NOT EXISTS pg_trgm;
+    - CREATE EXTENSION IF NOT EXISTS pgcrypto;
+    # 5. Utilities
+    - CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+    - CREATE EXTENSION IF NOT EXISTS hstore;
+    # 6. Monitoring & Auditing
+    - CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+    - CREATE EXTENSION IF NOT EXISTS pgaudit;
+
+monitoring:
+  enablePodMonitor: true
+
+storage:
+  storageClass: "local-storage" # Points to the local PVs
+  size: 100Gi # Must match or be less than PV size
+
+# --- Backups (Barman to MinIO) ---
+backup:
+  enabled: true
+  retentionPolicy: "30d"
+  barmanObjectStore:
+    destinationPath: "s3://postgres-main-backups/"
+    endpointURL: "http://minio.storage.svc.cluster.local:9000"
+    s3Credentials:
+      accessKeyId:
+        name: minio-secrets
+        key: root-user
+      secretAccessKey:
+        name: minio-secrets
+        key: root-password
+    wal:
+      compression: gzip
+    data:
+      compression: gzip
+
+# --- PgBouncer Pooling ---
+pooler:
+  enabled: true
+  instances: 2
+  poolMode: transaction
+  parameters:
+    max_client_conn: "1000"
+    default_pool_size: "20"
+
+# Optional LAN exposure for operational clients. Keep disabled by default;
+# enable per-cluster only when direct Postgres access is intentionally required.
+lanAccess:
+  enabled: false
+  name: ""
+  type: LoadBalancer
+  loadBalancerIP: ""
+  annotations: {}
+  port: 5432
+  targetPort: pgbouncer
+  poolerName: ""

@@ -1,0 +1,82 @@
+image:
+  repository: linuxserver/jellyfin
+  tag: "" # Defaults to Chart.AppVersion
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+deploymentStrategy: {}
+# fullnameOverride: "jellyfin" # Generally not needed if chart name is 'jellyfin' and release name is also 'jellyfin'
+# nameOverride: ""
+
+containerName: jellyfin # Name of the container within the pod
+
+jellyfin:
+  port: 8096 # Default Jellyfin port
+
+env:
+  TZ: "Asia/Dubai"
+  PUID: "1000"
+  PGID: "1000"
+  JELLYFIN_PublishedServerUrl: "https://jellyfin.homelab.internal"
+
+service:
+  type: ClusterIP
+  port: 8096
+  targetPort: 8096
+
+ingress:
+  enabled: false
+  ingressClassName: traefik
+  host: jellyfin.homelab.internal
+  annotations: {}
+  tls:
+    enabled: true
+
+persistence:
+  config:
+    existingClaim: ""
+    storageClass: "longhorn-persistent"
+    accessMode: ReadWriteOnce
+    size: 5Gi
+    mountPath: /config
+    annotations:
+      helm.sh/resource-policy: keep
+      argocd.argoproj.io/sync-options: Prune=false
+
+  media:
+    type: pvc
+    existingClaim: media-videos-nfs-pvc
+    mountPath: /data/media
+    readOnly: false
+
+hardwareAcceleration:
+  enabled: true
+  driDevicePath: /dev/dri
+  renderGid: 105
+  videoGid: 44
+
+resources:
+  requests:
+    cpu: "1"
+    memory: 1.5Gi
+    gpu.intel.com/i915: 1 # Request 1 Intel GPU
+  limits:
+    cpu: "3"
+    memory: 3Gi
+    gpu.intel.com/i915: 1 # Limit to 1 Intel GPU
+
+podSecurityContext:
+  fsGroup: 1000 # Matches PGID
+
+# securityContext for the container.
+# supplementalGroups for /dev/dri are no longer needed here as the
+# device plugin handles the necessary device injection and permissions.
+# You might still want other securityContext settings if needed,
+# but the GPU-specific ones are managed by the plugin.
+securityContext: {}
+  # capabilities:
+  #   drop:
+  #   - ALL
+  # readOnlyRootFilesystem: true
+  # runAsNonRoot: true
+  # PUID/PGID in env vars will handle user/group for LSIO image

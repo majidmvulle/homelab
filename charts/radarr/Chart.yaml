@@ -1,0 +1,7 @@
+apiVersion: v2
+name: radarr
+description: A Helm chart for Radarr (linuxserver.io image)
+type: application
+version: 0.1.0
+appVersion: "5.26.2"
+dependencies: []

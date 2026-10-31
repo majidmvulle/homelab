@@ -1,0 +1,145 @@
+# Staged Unbound host overrides derived from the validated 2026-06-22 Pi-hole Teleporter export.
+#
+# This file is planning data only. Do not treat it as a live-applied OPNsense config dump.
+# Keep it aligned with docs/dns-record-inventory.yaml until the actual OPNsense migration step.
+# OPNsense Unbound documentation describes host overrides plus aliases for additional names on the same IP.
+# This file follows that documented model rather than assuming literal CNAME support in the UI.
+
+domain: homelab.internal
+source_archive: pi-hole_rpi03_teleporter_2026-06-22_14-42-46__04.zip
+record_type: A
+
+host_overrides:
+  - host: opnsense01
+    domain: homelab.internal
+    ip: 10.0.0.1
+    owner: manual
+  - host: pve01
+    domain: homelab.internal
+    ip: 10.0.0.112
+    owner: manual
+  - host: mini01
+    domain: homelab.internal
+    ip: 10.0.0.120
+    owner: manual
+  - host: mini02
+    domain: homelab.internal
+    ip: 10.0.0.130
+    owner: manual
+  - host: mini03
+    domain: homelab.internal
+    ip: 10.0.0.140
+    owner: manual
+  - host: rpi01
+    domain: homelab.internal
+    ip: 10.0.0.150
+    owner: manual
+  - host: rpi02
+    domain: homelab.internal
+    ip: 10.0.0.160
+    owner: manual
+  - host: rpi03
+    domain: homelab.internal
+    ip: 10.0.0.170
+    owner: manual
+  - host: rpi04
+    domain: homelab.internal
+    ip: 10.0.0.171
+    owner: manual
+  - host: synology01
+    domain: homelab.internal
+    ip: 10.0.0.200
+    owner: manual
+    aliases:
+      - files.homelab.internal
+      - photos.homelab.internal
+      - s3.homelab.internal
+  - host: k3s
+    domain: homelab.internal
+    ip: 10.0.0.2
+    owner: manual
+  - host: postgres-writer
+    domain: homelab.internal
+    ip: 10.0.0.3
+    owner: manual
+  - host: postgres-reader
+    domain: homelab.internal
+    ip: 10.0.0.4
+    owner: manual
+  - host: traefik
+    domain: homelab.internal
+    ip: 10.0.0.18
+    owner: external-dns
+  - host: syncthing
+    domain: homelab.internal
+    ip: 10.0.0.18
+    owner: external-dns
+  - host: torrent
+    domain: homelab.internal
+    ip: 10.0.0.18
+    owner: external-dns
+  - host: radarr
+    domain: homelab.internal
+    ip: 10.0.0.18
+    owner: external-dns
+  - host: jellyfin
+    domain: homelab.internal
+    ip: 10.0.0.18
+    owner: external-dns
+  - host: lidarr
+    domain: homelab.internal
+    ip: 10.0.0.18
+    owner: external-dns
+  - host: navidrome
+    domain: homelab.internal
+    ip: 10.0.0.18
+    owner: external-dns
+  - host: sonarr
+    domain: homelab.internal
+    ip: 10.0.0.18
+    owner: external-dns
+  - host: haproxy
+    domain: homelab.internal
+    ip: 10.0.0.18
+    owner: external-dns
+  - host: grafana
+    domain: homelab.internal
+    ip: 10.0.0.18
+    owner: external-dns
+  - host: minio
+    domain: homelab.internal
+    ip: 10.0.0.18
+    owner: external-dns
+  - host: temporal
+    domain: homelab.internal
+    ip: 10.0.0.18
+    owner: external-dns
+  - host: prowlarr
+    domain: homelab.internal
+    ip: 10.0.0.18
+    owner: external-dns
+  - host: argocd
+    domain: homelab.internal
+    ip: 10.0.0.18
+    owner: external-dns
+  - host: policy-reporter
+    domain: homelab.internal
+    ip: 10.0.0.18
+    owner: external-dns
+  - host: affine
+    domain: homelab.internal
+    ip: 10.0.0.18
+    owner: external-dns
+  - host: mailpit
+    domain: homelab.internal
+    ip: 10.0.0.18
+    owner: external-dns
+not_in_export_but_still_expected_to_exist:
+  - fqdn: switch01.homelab.internal
+    action: verify current IP manually before Unbound cutover
+  - fqdn: ap01.homelab.internal
+    action: verify current IP manually before Unbound cutover
+
+retired_records:
+  - jackett.homelab.internal
+  - wg.homelab.internal

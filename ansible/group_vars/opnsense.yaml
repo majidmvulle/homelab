@@ -1,0 +1,101 @@
+---
+opnsense_mode: dedicated_wan_nic
+opnsense_lan_parent_interface: vtnet0
+opnsense_wan_parent_interface: vtnet1
+opnsense_bootstrap_lan_subnet: 10.0.0.0/24
+opnsense_bootstrap_lan_ip: 10.0.0.1
+opnsense_management_interface: vlan10
+opnsense_dns_stack:
+  frontend: adguard-home
+  local_resolver: unbound
+  local_domain: homelab.internal
+opnsense_feature_rollout:
+  - inter_vlan_routing
+  - dhcp_per_vlan
+  - adguard_home
+  - unbound_local_dns
+  - wireguard
+  - netflow
+  - suricata
+  - squid_proxy_optional_late_phase
+opnsense_vlans:
+  - name: management
+    vlan_id: 10
+    subnet: 10.10.10.0/24
+    gateway: 10.10.10.1
+    dhcp_range: 10.10.10.100-10.10.10.199
+  - name: servers
+    vlan_id: 20
+    subnet: 10.10.20.0/24
+    gateway: 10.10.20.1
+    dhcp_range: 10.10.20.100-10.10.20.199
+  - name: kubernetes
+    vlan_id: 30
+    subnet: 10.10.30.0/24
+    gateway: 10.10.30.1
+    dhcp_range: 10.10.30.100-10.10.30.199
+  - name: clients
+    vlan_id: 40
+    subnet: 10.10.40.0/24
+    gateway: 10.10.40.1
+    dhcp_range: 10.10.40.100-10.10.40.199
+  - name: iot
+    vlan_id: 50
+    subnet: 10.10.50.0/24
+    gateway: 10.10.50.1
+    dhcp_range: 10.10.50.100-10.10.50.199
+opnsense_flat_wifi_network:
+  vlan_id: 40
+  subnet: 10.10.40.0/24
+  note: netgear-lax20-access-only
+opnsense_planned_client_reservations:
+  - name: macbook-pro-wifi
+    description: MacBook Pro approved Kubernetes client over Wi-Fi
+    vlan: 40
+    ip: 10.10.40.10
+    mac: 02:00:00:00:00:01
+    interface: wifi
+  - name: gaming-pc-ethernet
+    description: Gaming PC approved Kubernetes client over Ethernet
+    vlan: 40
+    ip: 10.10.40.20
+    mac: 02:00:00:00:00:02
+    interface: ethernet
+  - name: pixel-10-pro-xl
+    description: Google Pixel 10 Pro XL approved Kubernetes client
+    vlan: 40
+    ip: 10.10.40.30
+    mac: 02:00:00:00:00:03
+    interface: wifi
+    note: disable private-randomized MAC for the home SSID
+  - name: samsung-tab-s7
+    description: Samsung Tab S7 approved Kubernetes client
+    vlan: 40
+    ip: 10.10.40.31
+    mac: 02:00:00:00:00:04
+    interface: wifi
+    note: disable private-randomized MAC for the home SSID
+opnsense_planned_aliases:
+  - name: approved_k8s_client_devices
+    type: host
+    members:
+      - 10.10.40.10
+      - 10.10.40.20
+      - 10.10.40.30
+      - 10.10.40.31
+    purpose: approved client devices allowed to reach Kubernetes-published services
+  - name: approved_k8s_published_ports
+    type: port
+    members:
+      - "80"
+      - "443"
+    purpose: published HTTP and HTTPS entrypoints only
+  - name: k8s_vlan30_subnet
+    type: network
+    members:
+      - 10.10.30.0/24
+    purpose: Kubernetes node and cluster-facing subnet
+  - name: synology_storage_endpoints
+    type: host
+    members: []
+    purpose: populate with the Synology IP and any Garage/S3 VIPs before enabling VLAN 30 restrictions

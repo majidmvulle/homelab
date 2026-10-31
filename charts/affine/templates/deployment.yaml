@@ -1,0 +1,209 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "affine.fullname" . }}
+  labels:
+    {{- include "affine.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  {{- with .Values.deploymentStrategy }}
+  strategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "affine.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "affine.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        - name: migrate
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          command: ['sh', '-c', 'node ./scripts/self-host-predeploy.js']
+          env:
+            - name: REDIS_SERVER_HOST
+              value: {{ .Values.redis.host | quote }}
+            - name: REDIS_SERVER_PORT
+              value: {{ .Values.redis.port | quote }}
+            - name: DB_USERNAME
+              value: {{ .Values.postgres.user | quote }}
+            - name: DB_DATABASE
+              value: {{ .Values.postgres.dbName | quote }}
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: affine-secrets
+                  key: db-password
+            - name: REDIS_SERVER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: affine-secrets
+                  key: redis-password
+            - name: DATABASE_URL
+              value: "postgresql://$(DB_USERNAME):$(DB_PASSWORD)@{{ .Values.postgres.host }}:{{ .Values.postgres.port }}/$(DB_DATABASE)"
+            - name: AFFINE_CONFIG_PATH
+              value: "/home/node/.affine/config"
+            - name: AFFINE_STORAGE_PATH
+              value: "/home/node/.affine/storage"
+          volumeMounts:
+            - name: storage
+              mountPath: /home/node/.affine/storage
+            - name: config
+              mountPath: /home/node/.affine/config
+            - name: affine-config
+              mountPath: /home/node/.affine/config/config.json
+              subPath: config.json
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: 3010
+              protocol: TCP
+          env:
+            - name: AFFINE_SERVER_HOST
+              value: "0.0.0.0"
+            - name: AFFINE_SERVER_PORT
+              value: "3010"
+            - name: AFFINE_SERVER_EXTERNAL_URL
+              value: "https://{{ .Values.ingress.host }}"
+            - name: DEPLOYMENT_TYPE
+              value: "selfhosted"
+            - name: SERVER_FLAVOR
+              value: "allinone"
+            - name: REDIS_SERVER_HOST
+              value: {{ .Values.redis.host | quote }}
+            - name: REDIS_SERVER_PORT
+              value: {{ .Values.redis.port | quote }}
+            - name: DB_USERNAME
+              value: {{ .Values.postgres.user | quote }}
+            - name: DB_DATABASE
+              value: {{ .Values.postgres.dbName | quote }}
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: affine-secrets
+                  key: db-password
+            - name: REDIS_SERVER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: affine-secrets
+                  key: redis-password
+            - name: AFFINE_ADMIN_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: affine-secrets
+                  key: admin-email
+                  optional: true
+            - name: AFFINE_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: affine-secrets
+                  key: admin-password
+                  optional: true
+            - name: MAILER_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.mailer.existingSecretName }}
+                  key: mailer-host
+                  optional: true
+            - name: MAILER_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.mailer.existingSecretName }}
+                  key: mailer-port
+                  optional: true
+            - name: MAILER_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.mailer.existingSecretName }}
+                  key: mailer-user
+                  optional: true
+            - name: MAILER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.mailer.existingSecretName }}
+                  key: mailer-password
+                  optional: true
+            - name: MAILER_SENDER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.mailer.existingSecretName }}
+                  key: mailer-sender
+                  optional: true
+            - name: MAILER_SECURE
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.mailer.existingSecretName }}
+                  key: mailer-secure
+                  optional: true
+            {{- if .Values.mailer.caCert.enabled }}
+            - name: NODE_EXTRA_CA_CERTS
+              value: "{{ .Values.mailer.caCert.mountPath }}/{{ .Values.mailer.caCert.fileName }}"
+            {{- end }}
+            - name: DATABASE_URL
+              value: "postgresql://$(DB_USERNAME):$(DB_PASSWORD)@{{ .Values.postgres.host }}:{{ .Values.postgres.port }}/$(DB_DATABASE)"
+            - name: AFFINE_CONFIG_PATH
+              value: "/home/node/.affine/config"
+            - name: AFFINE_STORAGE_PATH
+              value: "/home/node/.affine/storage"
+          volumeMounts:
+            - name: storage
+              mountPath: /home/node/.affine/storage
+            - name: config
+              mountPath: /home/node/.affine/config
+            - name: affine-config
+              mountPath: /home/node/.affine/config/config.json
+              subPath: config.json
+              readOnly: true
+            - name: app-src
+              mountPath: /app/src
+            - name: tmp
+              mountPath: /tmp
+            {{- if .Values.mailer.caCert.enabled }}
+            - name: mailer-ca-cert
+              mountPath: {{ .Values.mailer.caCert.mountPath }}
+              readOnly: true
+            {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: storage
+          persistentVolumeClaim:
+            claimName: {{ include "affine.fullname" . }}-storage
+        - name: config
+          persistentVolumeClaim:
+            claimName: {{ include "affine.fullname" . }}-config
+        - name: affine-config
+          configMap:
+            name: {{ include "affine.fullname" . }}-config
+            items:
+              - key: config.json
+                path: config.json
+        - name: app-src
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+        {{- if .Values.mailer.caCert.enabled }}
+        - name: mailer-ca-cert
+          secret:
+            secretName: {{ .Values.mailer.existingSecretName }}
+            items:
+              - key: {{ .Values.mailer.caCert.secretKey }}
+                path: {{ .Values.mailer.caCert.fileName }}
+        {{- end }}

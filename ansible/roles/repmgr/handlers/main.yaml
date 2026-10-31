@@ -1,0 +1,25 @@
+- name: Restart repmgrd
+  ansible.builtin.systemd:
+    name: repmgrd
+    state: restarted
+    enabled: yes
+    daemon_reload: yes
+
+- name: Reload systemd and restart repmgrd
+  ansible.builtin.systemd:
+    daemon_reload: yes
+    name: repmgrd
+    state: restarted
+
+- name: Start postgresql on standby after clone
+  ansible.builtin.systemd:
+    name: "postgresql@{{ pg_version }}-main.service"
+    state: started
+    enabled: yes
+  when: inventory_hostname in groups['postgres_standbys']
+
+- name: Restart keepalived
+  ansible.builtin.systemd:
+    name: keepalived
+    state: restarted
+    enabled: yes

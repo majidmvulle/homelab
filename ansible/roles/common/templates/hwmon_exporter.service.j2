@@ -1,0 +1,10 @@
+[Unit]
+Description=Export lm-sensors metrics for Prometheus Node Exporter
+Wants=hwmon_exporter.timer
+
+[Service]
+Type=oneshot
+ExecStart={{ hwmon_export_script_path }}
+
+[Install]
+WantedBy=multi-user.target

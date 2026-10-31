@@ -1,0 +1,6 @@
+apiVersion: v2
+name: cloudflare-ddns
+description: A Helm chart for Cloudflare Dynamic DNS updates using curl and jq
+type: application
+version: 0.1.3
+appVersion: "3.2.3"

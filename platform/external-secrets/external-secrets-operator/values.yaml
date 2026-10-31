@@ -1,0 +1,3 @@
+# Default values are generally sufficient for the operator itself.
+# We can specify resource requests/limits for production-grade setups.
+installCRDs: true

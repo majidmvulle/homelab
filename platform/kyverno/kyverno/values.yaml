@@ -1,0 +1,32 @@
+kyverno:
+  features:
+    policyExceptions:
+      enabled: true
+  # Using default configuration for single replica deployment (chart default is 1 for most components)
+  kyverno-api:
+    labels:
+      homelab.internal/argocd-sync: "true"
+    annotations:
+      homelab.internal/argocd-sync: "true"
+  admissionController:
+    replicas: 1
+  backgroundController:
+    replicas: 1
+  cleanupController:
+    replicas: 1
+  reportsController:
+    replicas: 1
+    # Kyverno 3.8 no longer inherits wildcard read permissions. Allow report
+    # generation to observe Argo CD Applications without repeatedly retrying
+    # the forbidden list/watch request.
+    rbac:
+      clusterRole:
+        extraResources:
+          - apiGroups:
+              - argoproj.io
+            resources:
+              - applications
+            verbs:
+              - get
+              - list
+              - watch

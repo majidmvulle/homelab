@@ -1,0 +1,31 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: protect-argocd-platform-app
+spec:
+  background: false
+  validationFailureAction: Enforce
+  rules:
+    - name: block-delete-argocd-platform-app
+      match:
+        resources:
+          kinds:
+            - argoproj.io/v1alpha1/Application
+          namespaces:
+            - argocd
+          names:
+            - argocd-platform
+      preconditions:
+        all:
+          - key: "{{ request.operation }}"
+            operator: Equals
+            value: "DELETE"
+      validate:
+        message: "Deletion of argocd/argocd-platform is blocked by policy."
+        allowExistingViolations: true
+        deny:
+          conditions:
+            all:
+              - key: "{{ request.operation }}"
+                operator: Equals
+                value: "DELETE"

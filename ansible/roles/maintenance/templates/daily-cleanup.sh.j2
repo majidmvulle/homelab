@@ -1,0 +1,24 @@
+#!/bin/bash
+set -e
+
+# 1. Clean Apt Cache and Autoremove unused dependencies
+echo "Cleaning Apt..."
+apt-get autoremove -y
+apt-get clean
+
+# 2. Vacuum Systemd Journals
+# Keep only the last 2 days or max 500MB, whichever comes first
+echo "Vacuuming Journald..."
+journalctl --vacuum-time=2d --vacuum-size=500M
+
+# 3. Prune Unused Container Images (K3s/Containerd)
+echo "Pruning Containerd images..."
+if command -v k3s &> /dev/null; then
+    # Use the k3s bundled crictl to ensure correct socket usage
+    /usr/local/bin/k3s crictl rmi --prune
+elif command -v crictl &> /dev/null; then
+    # Fallback for non-k3s nodes if crictl is installed
+    crictl rmi --prune
+fi
+
+echo "Cleanup complete."

@@ -1,0 +1,10 @@
+[Unit]
+Description=Run hwmon_exporter script periodically
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=30s
+Unit=hwmon_exporter.service
+
+[Install]
+WantedBy=timers.target

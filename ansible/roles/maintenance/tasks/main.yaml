@@ -1,0 +1,30 @@
+---
+- name: Ensure maintenance scripts directory exists
+  ansible.builtin.file:
+    path: /usr/local/bin
+    state: directory
+    mode: '0755'
+
+- name: Deploy daily system cleanup script
+  ansible.builtin.template:
+    src: daily-cleanup.sh.j2
+    dest: /usr/local/bin/daily-cleanup.sh
+    mode: '0755'
+    owner: root
+    group: root
+
+- name: Schedule daily cleanup cron job (Runs at 04:30 AM)
+  ansible.builtin.cron:
+    name: "Daily System Cleanup"
+    minute: "30"
+    hour: "4"
+    job: "/usr/local/bin/daily-cleanup.sh >> /var/log/daily-cleanup.log 2>&1"
+    user: root
+    state: present
+
+- name: Configure Journald limits (Prevent logs from filling disk)
+  ansible.builtin.template:
+    src: journald.conf.j2
+    dest: /etc/systemd/journald.conf
+    mode: '0644'
+  notify: Restart journald

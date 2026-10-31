@@ -1,0 +1,190 @@
+- name: Ensure dependencies for adding APT repositories are installed
+  ansible.builtin.apt:
+    name: [apt-transport-https, ca-certificates, curl, gnupg, locales]
+    state: present
+  tags: [postgres, packages, repo, locale]
+
+# --- Locale Generation ---
+- name: Ensure required locales are present in /etc/locale.gen
+  ansible.builtin.lineinfile:
+    path: /etc/locale.gen
+    regexp: "^{{ item | regex_escape() }} UTF-8"
+    line: "{{ item }} UTF-8"
+    state: present
+  loop: "{{ required_pg_locales }}"
+  register: locale_gen_config_changed
+  tags: [postgres, locale]
+
+- name: Generate locales if configuration changed
+  ansible.builtin.command: locale-gen
+  when: locale_gen_config_changed.changed
+  changed_when: true
+  tags: [postgres, locale]
+  # No notify here, we will handle PG restart explicitly if needed after this.
+
+- name: Ensure dependencies for adding APT repositories are installed
+  ansible.builtin.apt:
+    name: [ apt-transport-https, ca-certificates, curl, gnupg, locales ]
+    state: present
+  tags: [postgres, packages, repo, locale]
+
+- name: Add PostgreSQL APT repository key
+  ansible.builtin.get_url:
+    url: https://www.postgresql.org/media/keys/ACCC4CF8.asc
+    dest: /etc/apt/trusted.gpg.d/postgresql-archive-keyring.asc
+    mode: '0644'
+  tags: [postgres, packages, repo]
+
+- name: Add PostgreSQL APT repository
+  ansible.builtin.apt_repository:
+    repo: "deb https://apt.postgresql.org/pub/repos/apt {{ ansible_distribution_release }}-pgdg main"
+    filename: pgdg
+    state: present
+    update_cache: yes
+  tags: [postgres, packages, repo]
+
+- name: Install PostgreSQL server, client, contrib, and Python adapter (version {{ pg_version }})
+  ansible.builtin.apt:
+    name:
+      - postgresql-{{ pg_version }}
+      - postgresql-client-{{ pg_version }}
+      - postgresql-contrib-{{ pg_version }}
+      - python3-psycopg2
+    state: present
+  tags: [postgres, packages]
+
+- name: Ensure PostgreSQL main configuration directory exists (critical for all nodes)
+  ansible.builtin.file:
+    path: "{{ pg_config_dir }}"
+    state: directory
+    owner: "{{ pg_user }}"
+    group: "{{ pg_group }}"
+    mode: '0750' # postgres user and postgres group access
+  tags: [postgres, config]
+
+- name: Ensure PostgreSQL data parent directory exists
+  ansible.builtin.file:
+    path: "{{ pg_data_parent_dir }}" # /data/postgresql
+    state: directory
+    owner: "{{ pg_user }}"
+    group: "{{ pg_group }}"
+    mode: '0700' # postgres user owns this
+  tags: [postgres, config]
+
+# --- Primary Node Setup ---
+- name: Define a temporary path for initdb task
+  ansible.builtin.set_fact:
+    initdb_remote_tmp_path: "{{ pg_data_parent_dir }}/.ansible-initdb-tmp-{{ ansible_date_time.epoch }}"
+  when: inventory_hostname in groups['postgres_primary']
+  tags: [postgres, initdb, primary]
+
+- name: Ensure initdb remote_tmp directory exists and is owned by postgres
+  ansible.builtin.file:
+    path: "{{ initdb_remote_tmp_path }}"
+    state: directory
+    owner: "{{ pg_user }}"
+    group: "{{ pg_group }}"
+    mode: '0700'
+  when: inventory_hostname in groups['postgres_primary']
+  tags: [postgres, initdb, primary]
+
+- name: Initialize PostgreSQL cluster on primary if not already initialized
+  ansible.builtin.command: "{{ pg_bin_dir }}/initdb -D {{ pg_data_dir }} --waldir={{ pg_wal_dir }} --locale={{ required_pg_locales[0] }} --encoding=UTF8"
+  args:
+    creates: "{{ pg_data_dir }}/PG_VERSION"
+  become: yes
+  become_user: "{{ pg_user }}"
+  vars:
+    ansible_allow_world_readable_tmpfiles: True
+  environment:
+    ANSIBLE_REMOTE_TEMP: "{{ initdb_remote_tmp_path }}"
+  when: inventory_hostname in groups['postgres_primary']
+  tags: [postgres, initdb, primary]
+  notify: Restart postgresql on primary
+
+- name: Clean up initdb remote_tmp directory
+  ansible.builtin.file:
+    path: "{{ initdb_remote_tmp_path }}"
+    state: absent
+  when: inventory_hostname in groups['postgres_primary']
+  tags: [postgres, initdb, primary]
+
+# --- Configuration applicable to ALL PostgreSQL nodes ---
+- name: Template postgresql.conf on all nodes
+  ansible.builtin.template:
+    src: postgresql.conf.j2
+    dest: "{{ pg_config_dir }}/postgresql.conf"
+    owner: "{{ pg_user }}"
+    group: "{{ pg_group }}"
+    mode: '0600'
+  notify: # Notify multiple handlers
+    - Restart postgresql on primary
+    - Ensure postgresql on standby is enabled but stopped
+  tags: [postgres, config]
+
+- name: Template pg_hba.conf on all nodes
+  ansible.builtin.template:
+    src: pg_hba.conf.j2
+    dest: "{{ pg_config_dir }}/pg_hba.conf"
+    owner: "{{ pg_user }}"
+    group: "{{ pg_group }}"
+    mode: '0600'
+  notify: Reload postgresql on primary # Only primary needs immediate reload from this role
+  tags: [postgres, config]
+
+# --- Service Management & User/DB for Repmgr (on Primary) ---
+# Ensure primary service is running before creating users/dbs
+- name: Ensure PostgreSQL service is started and enabled on primary (before user/db creation)
+  ansible.builtin.systemd:
+    name: "postgresql@{{ pg_version }}-main.service"
+    state: started
+    enabled: yes
+  when: inventory_hostname in groups['postgres_primary']
+  tags: [postgres, service, primary]
+
+- name: Create repmgr user on primary
+  community.postgresql.postgresql_user:
+    db: postgres # Connect to default 'postgres' db to create the role
+    name: "{{ repmgr_user }}"
+    password: "{{ repmgr_password }}"
+    role_attr_flags: "SUPERUSER,LOGIN" # Repmgr needs superuser
+    state: present
+  become: yes
+  become_user: "{{ pg_user }}" # Run as the postgres OS user
+  when: inventory_hostname in groups['postgres_primary']
+  tags: [postgres, user, primary, repmgr]
+
+- name: Create repmgr database on primary
+  community.postgresql.postgresql_db:
+    name: "{{ repmgr_db }}"
+    owner: "{{ repmgr_user }}" # User should now exist
+    state: present
+  become: yes
+  become_user: "{{ pg_user }}" # Run as the postgres OS user
+  when: inventory_hostname in groups['postgres_primary']
+  tags: [postgres, db, primary, repmgr]
+
+# --- Standby Node Setup (preparation for repmgr clone) ---
+# Ensure data directories are present and empty for standbys
+- name: Ensure PostgreSQL data directory (and WAL dir) exists and is empty on standbys before clone
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory # Ensures directory exists
+    owner: "{{ pg_user }}"
+    group: "{{ pg_group }}"
+    mode: '0700'
+  loop:
+    - "{{ pg_data_dir }}"
+    - "{{ pg_wal_dir }}"
+  when: inventory_hostname in groups['postgres_standbys']
+  tags: [postgres, config, standby]
+  # Note: If these directories had old data, repmgr clone --force would overwrite,
+  # but ensuring they are just present and owned by postgres is good.
+
+- name: Ensure PostgreSQL service is stopped and disabled on standbys before clone
+  ansible.builtin.systemd:
+    name: "postgresql@{{ pg_version }}-main.service"
+    state: stopped
+    enabled: no # Disable it; repmgr role will enable and start after clone
+  when: inventory_hostname in groups['postgres_standbys']
+  tags: [postgres, service, standby]

@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ include "lidarr.fullname" . }}-downloads-nfs-pv
+  labels:
+    {{- include "lidarr.labels" . | nindent 4 }}
+    volume-type: nfs
+  {{- with .Values.persistence.downloads.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  capacity:
+    storage: {{ .Values.persistence.downloads.size }}
+  volumeMode: Filesystem
+  accessModes:
+    - {{ .Values.persistence.downloads.accessMode }}
+  persistentVolumeReclaimPolicy: Retain # Keeps the PV object if PVC is deleted
+  storageClassName: "" # Empty string for manual binding
+  mountOptions:
+    - hard
+    - nfsvers=4.1
+  nfs:
+    path: {{ .Values.persistence.downloads.nfs.path }}
+    server: {{ .Values.persistence.downloads.nfs.server }}
+    readOnly: {{ .Values.persistence.downloads.nfs.readOnly }}

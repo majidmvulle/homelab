@@ -1,0 +1,113 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "cloudflare-ddns.fullname" . }}-config
+  labels:
+    {{ include "cloudflare-ddns.labels" . | nindent 4 }}
+data:
+  domains.json: |
+    {{ .Values.cloudflare.config | toJson }}
+
+  ddns.sh: |
+    #!/bin/bash
+    set -euo pipefail
+
+    API_URL="https://api.cloudflare.com/client/v4"
+    CONFIG_FILE="/config/domains.json"
+
+    log() { echo "$(date -u +'%Y-%m-%dT%H:%M:%SZ') [INFO] $1"; }
+    error() { echo "$(date -u +'%Y-%m-%dT%H:%M:%SZ') [ERROR] $1"; }
+
+    command -v curl >/dev/null 2>&1 || { error "curl missing"; exit 1; }
+    command -v jq >/dev/null 2>&1 || { error "jq missing"; exit 1; }
+
+    if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+        error "CLOUDFLARE_API_TOKEN is missing"
+        exit 1
+    fi
+    CLOUDFLARE_API_TOKEN=$(echo -n "$CLOUDFLARE_API_TOKEN" | tr -d '\r\n')
+
+    FAILED=0
+
+    log "Fetching current public IP..."
+    if ! CURRENT_IP=$(curl -sS --max-time 10 https://ipv4.icanhazip.com | tr -d '\n'); then
+        error "Failed to fetch current public IP"
+        exit 1
+    fi
+
+    if [[ ! $CURRENT_IP =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        error "Invalid IP retrieved: $CURRENT_IP"
+        exit 1
+    fi
+    log "Current Public IP: $CURRENT_IP"
+
+    while read -r zone_entry; do
+
+        ZONE_ID=$(echo "$zone_entry" | jq -r '.zoneId')
+
+        while read -r RECORD_NAME; do
+
+            log "--- Processing $RECORD_NAME (Zone: $ZONE_ID) ---"
+
+            if ! RECORD_INFO=$(curl -sS --max-time 15 -X GET "$API_URL/zones/$ZONE_ID/dns_records?type=A&name=$RECORD_NAME" \
+                -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+                -H "Content-Type: application/json"); then
+                error "Cloudflare request failed while fetching $RECORD_NAME"
+                FAILED=1
+                continue
+            fi
+
+            SUCCESS=$(echo "$RECORD_INFO" | jq -r '.success')
+
+            if [ "$SUCCESS" != "true" ]; then
+                error "Failed to fetch $RECORD_NAME: $(echo "$RECORD_INFO" | jq -c '.errors // []')"
+                FAILED=1
+                continue
+            fi
+
+            RECORD_COUNT=$(echo "$RECORD_INFO" | jq '.result | length')
+            if [ "$RECORD_COUNT" -eq "0" ]; then
+                error "No A record found for $RECORD_NAME"
+                FAILED=1
+                continue
+            fi
+
+            RECORD_ID=$(echo "$RECORD_INFO" | jq -r '.result[0].id')
+            RECORD_IP=$(echo "$RECORD_INFO" | jq -r '.result[0].content')
+            PROXIED=$(echo "$RECORD_INFO" | jq '.result[0].proxied')
+            TTL=$(echo "$RECORD_INFO" | jq '.result[0].ttl')
+
+            if [ "$CURRENT_IP" == "$RECORD_IP" ]; then
+                log "Match: $RECORD_NAME is already $RECORD_IP"
+            else
+                log "Mismatch: $RECORD_NAME is $RECORD_IP. Updating to $CURRENT_IP..."
+
+                UPDATE_PAYLOAD=$(jq -nc \
+                    --arg name "$RECORD_NAME" \
+                    --arg content "$CURRENT_IP" \
+                    --argjson ttl "$TTL" \
+                    --argjson proxied "$PROXIED" \
+                    '{"type":"A","name":$name,"content":$content,"ttl":$ttl,"proxied":$proxied}')
+
+                log "Updating $RECORD_NAME with payload: $UPDATE_PAYLOAD"
+
+                if ! UPDATE_RESPONSE=$(curl -sS --max-time 15 -X PUT "$API_URL/zones/$ZONE_ID/dns_records/$RECORD_ID" \
+                    -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+                    -H "Content-Type: application/json" \
+                    --data "$UPDATE_PAYLOAD"); then
+                    error "Cloudflare request failed while updating $RECORD_NAME"
+                    FAILED=1
+                    continue
+                fi
+
+                if [ "$(echo "$UPDATE_RESPONSE" | jq -r '.success')" == "true" ]; then
+                    log "Success: Updated $RECORD_NAME"
+                else
+                    error "Failed to update $RECORD_NAME. Full response: $UPDATE_RESPONSE"
+                    FAILED=1
+                fi
+            fi
+        done < <(echo "$zone_entry" | jq -r '.records[]')
+    done < <(jq -c '.[]' "$CONFIG_FILE")
+
+    exit "$FAILED"

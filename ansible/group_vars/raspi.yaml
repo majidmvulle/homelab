@@ -1,0 +1,18 @@
+---
+ansible_python_interpreter: /usr/bin/python3
+
+raspi_bootstrap_mode: post_install
+raspi_default_user: majid
+raspi_enable_ssh: true
+raspi_packages:
+  - bash-completion
+  - ca-certificates
+  - curl
+  - git
+  - htop
+  - jq
+  - nfs-common
+  - python3-pip
+  - rsync
+  - vim
+raspi_enable_usb_ethernet_host_mode: true

@@ -1,0 +1,28 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: require-maintenance-ticket-for-deletes
+spec:
+  background: false
+  rules:
+    - name: require-ticket-on-pod-deletion
+      match:
+        resources:
+          kinds:
+            - Pod
+      preconditions:
+        all:
+          - key: "{{ request.operation }}"
+            operator: Equals
+            value: "DELETE"
+          - key: "{{ starts_with(request.userInfo.username, 'system:serviceaccount:') }}"
+            operator: Equals
+            value: false
+      validate:
+        allowExistingViolations: true
+        failureAction: Enforce
+        message: "Annotate the Pod with 'maintenance-ticket' before deleting it."
+        pattern:
+          metadata:
+            annotations:
+              maintenance-ticket: "?*"

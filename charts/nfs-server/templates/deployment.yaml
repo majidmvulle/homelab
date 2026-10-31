@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nfs-server
+  labels:
+    app: nfs-server
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: nfs-server
+  template:
+    metadata:
+      labels:
+        app: nfs-server
+    spec:
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: nfs-server
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 2049
+              name: nfs
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          volumeMounts:
+            - name: nfs-volume
+              mountPath: {{ .Values.persistence.mountPath }}
+            - name: tmp
+              mountPath: /tmp
+          env:
+            - name: ALLOWED_CLIENT
+              value: {{ .Values.nfs.allowedClient | quote }}
+            - name: NFS_OPTIONS
+              value: {{ .Values.nfs.nfsOptions | quote }}
+            - name: SHARED_DIRECTORY
+              value: {{ .Values.nfs.sharedDirectory | quote }}
+      volumes:
+        - name: nfs-volume
+          persistentVolumeClaim:
+            claimName: nfs-server-pvc
+        - name: tmp
+          emptyDir: {}

@@ -1,0 +1,166 @@
+kube-prometheus-stack:
+  global:
+    scrape_interval: 60s
+    evaluation_interval: 60s
+  prometheus:
+    prometheusSpec:
+      secrets:
+        - external-node-exporter-credentials
+      storageSpec:
+        volumeClaimTemplate:
+          spec:
+            storageClassName: longhorn-persistent
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 20Gi
+      retention: 5d
+      retentionSize: "10GB"
+      resources:
+        requests:
+          cpu: 100m
+          memory: 1Gi
+        limits:
+          cpu: 1000m
+          memory: 2Gi
+      # Increase startup probe timeout for WAL replay (takes ~1-2 min)
+      containers:
+        - name: prometheus
+          startupProbe:
+            httpGet:
+              path: /-/ready
+              port: 9090
+            failureThreshold: 60
+            periodSeconds: 5
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        fsGroup: 65534
+      service:
+        type: LoadBalancer
+      additionalScrapeConfigs:
+        - job_name: "baremetal-hp-nodes-temperature"
+          scrape_interval: 30s
+          static_configs:
+            - targets: ["10.0.0.120:9100", "10.0.0.130:9100", "10.0.0.140:9100"] # mini01.homelab.internal,mini02.homelab.internal,mini03.homelab.internal
+              labels:
+                group: "hp-prodesk-nodes"
+                environment: "homelab-baremetal"
+                collector_type: "baremetal-node-exporter"
+        - job_name: "external-node-exporter"
+          scrape_interval: 30s
+          static_configs:
+            - targets: ["10.0.0.170:9100"] # rpi03.homelab.internal
+          basic_auth:
+            username_file: /etc/prometheus/secrets/external-node-exporter-credentials/username
+            password_file: /etc/prometheus/secrets/external-node-exporter-credentials/password
+
+  grafana:
+    deploymentStrategy:
+      type: RollingUpdate
+      rollingUpdate:
+        maxSurge: 0
+        maxUnavailable: 1
+    admin:
+      existingSecret: grafana-admin-secrets
+      userKey: admin-user
+      passwordKey: admin-password
+    service:
+      type: ClusterIP
+    ingress:
+      enabled: true
+      ingressClassName: traefik
+      hosts:
+        - grafana.homelab.internal
+      tls:
+        - hosts:
+            - grafana.homelab.internal
+      annotations:
+        external-dns.alpha.kubernetes.io/hostname: grafana.homelab.internal
+    persistence:
+      enabled: true
+      storageClassName: longhorn-persistent
+      size: 2Gi
+      accessModes: ["ReadWriteOnce"]
+    resources:
+      requests:
+        cpu: 50m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    podSecurityContext:
+      runAsUser: 472
+      runAsGroup: 472
+      fsGroup: 472
+  alertmanager:
+    config:
+      global:
+        resolve_timeout: 5m
+      route:
+        group_by: ["job"]
+        group_wait: 30s
+        group_interval: 5m
+        repeat_interval: 12h
+        receiver: "null"
+      receivers:
+        - name: "null"
+    alertmanagerSpec:
+      storage:
+        volumeClaimTemplate:
+          spec:
+            storageClassName: longhorn-persistent
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 2Gi
+      resources:
+        requests:
+          cpu: 50m
+          memory: 128Mi
+        limits:
+          cpu: 100m
+          memory: 256Mi
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        fsGroup: 65534
+  prometheus-node-exporter:
+    fullnameOverride: node-exporter
+    service:
+      type: ClusterIP
+    extraArgs:
+      - --collector.textfile.directory=/run/node_exporter/textfile_collector
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 100m
+        memory: 256Mi
+  kube-state-metrics:
+    fullnameOverride: kube-state-metrics
+    service:
+      type: ClusterIP
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 100m
+        memory: 256Mi
+  kubelet:
+    enabled: true
+  kubeProxy:
+    enabled: true
+  kubeControllerManager:
+    enabled: false
+  kubeScheduler:
+    enabled: false
+  kubeEtcd:
+    enabled: false
+  prometheusOperator:
+    admissionWebhooks:
+      enabled: true
+      patch:
+        enabled: true

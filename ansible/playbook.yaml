@@ -1,0 +1,110 @@
+# 1. Common Setup
+- name: Prepare common settings for all HP nodes
+  hosts: hp_nodes
+  roles:
+    - role: common
+    - role: maintenance
+
+- name: Prepare Raspberry Pi baseline
+  hosts: raspi
+  roles:
+    - role: raspi_baseline
+
+- name: Prepare Proxmox host planning baseline
+  hosts: proxmox_hosts
+  roles:
+    - role: proxmox_prep
+
+- name: Validate OPNsense planning variables
+  hosts: localhost
+  gather_facts: false
+  connection: local
+  vars:
+    opnsense_mode: "{{ hostvars[groups['opnsense'][0]]['opnsense_mode'] }}"
+    opnsense_management_interface: "{{ hostvars[groups['opnsense'][0]]['opnsense_management_interface'] }}"
+    opnsense_lan_parent_interface: "{{ hostvars[groups['opnsense'][0]]['opnsense_lan_parent_interface'] }}"
+    opnsense_wan_parent_interface: "{{ hostvars[groups['opnsense'][0]]['opnsense_wan_parent_interface'] }}"
+    opnsense_dns_stack: "{{ hostvars[groups['opnsense'][0]]['opnsense_dns_stack'] }}"
+    opnsense_vlans: "{{ hostvars[groups['opnsense'][0]]['opnsense_vlans'] }}"
+  roles:
+    - role: opnsense_scaffold
+
+- name: Setup NFS Server
+  hosts: hp_nodes
+  roles:
+    - role: nfs_server
+
+# 2. Keepalived
+- name: Setup Keepalived for K3s VIP
+  hosts: k3s_masters_hp
+  become: true
+  vars_files:
+    - group_vars/vault.yaml
+  roles:
+    - role: keepalived
+  handlers:
+    - name: Restart keepalived
+      ansible.builtin.systemd:
+        name: keepalived
+        state: restarted
+        enabled: yes
+
+# 3. PostgreSQL Install
+- name: Setup PostgreSQL
+  hosts: postgres_all
+  vars_files:
+    - group_vars/vault.yaml
+  roles:
+    - role: postgresql
+  handlers:
+    - name: Restart postgresql
+      ansible.builtin.systemd:
+        name: "postgresql@{{ pg_version }}-main.service"
+        state: restarted
+        enabled: yes
+    - name: Reload postgresql
+      ansible.builtin.systemd:
+        name: "postgresql@{{ pg_version }}-main.service"
+        state: reloaded
+
+# 4. Exchange SSH Keys (Parallel Run - For Full Mesh)
+- name: Exchange SSH Keys for Repmgr
+  hosts: postgres_all
+  vars_files:
+    - group_vars/vault.yaml
+  tasks:
+    - name: Run Repmgr SSH tasks
+      ansible.builtin.include_role:
+        name: repmgr
+        apply:
+          tags:
+            - ssh
+      tags:
+        - ssh
+
+# 5. Setup Repmgr Cluster (Serial Run - For Registration Order)
+- name: Setup Repmgr for PostgreSQL Replication
+  hosts: postgres_all
+  serial: 1 # Ensures Primary is set up before Standbys try to clone
+  vars_files:
+    - group_vars/vault.yaml
+  roles:
+    - role: repmgr
+  handlers:
+    - name: Restart repmgrd
+      ansible.builtin.systemd:
+        name: repmgrd
+        state: restarted
+        enabled: yes
+        daemon_reload: yes
+    - name: Reload systemd and restart repmgrd
+      ansible.builtin.systemd:
+        daemon_reload: yes
+        name: repmgrd
+        state: restarted
+    - name: Start postgresql on standby after clone
+      ansible.builtin.systemd:
+        name: "postgresql@{{ pg_version }}-main.service"
+        state: started
+        enabled: yes
+      when: inventory_hostname in groups['postgres_standbys']

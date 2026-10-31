@@ -1,0 +1,46 @@
+# Platform-specific overrides for Valkey chart
+fullnameOverride: "valkey"
+
+# Valkey is deployed in replicated mode here, with HAProxy handling writer routing.
+sentinel:
+  enabled: true
+
+replication:
+  enabled: true
+  replicas: 3
+
+# Use homelab storage class
+persistence:
+  storageClass: "longhorn-persistent"
+
+# Homelab-optimized resources
+resources:
+  requests:
+    memory: "256Mi"
+    cpu: "250m"
+  limits:
+    memory: "512Mi"
+    cpu: "500m"
+
+# Security: password from external secret
+auth:
+  enabled: true
+  existingSecret: "valkey-secret"
+  existingSecretPasswordKey: "password"
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - valkey
+              - key: app.kubernetes.io/instance
+                operator: In
+                values:
+                  - valkey
+          topologyKey: kubernetes.io/hostname

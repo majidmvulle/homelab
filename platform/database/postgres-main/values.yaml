@@ -1,0 +1,113 @@
+fullnameOverride: "postgres-main"
+apiGroup: "postgresql.cnpg.io"
+instances: 3
+primaryUpdateStrategy: unsupervised
+image:
+  repository: ghcr.io/majidmvulle/homelab-infra/postgres-custom
+  tag: "17-v0.0.1"
+  pullSecret: "ghcr-secret"
+ghcrSecret:
+  registry: "ghcr.io"
+  sourceKey: "argocd-repo-ghcr-majidmvulle-repo-secret"
+  usernameProperty: "username"
+  passwordProperty: "password"
+postgresql:
+  shared_preload_libraries:
+    - timescaledb
+    - pg_stat_statements
+    - pgaudit
+    - vector
+  parameters:
+    max_connections: "300"
+    shared_buffers: "1GB"
+    random_page_cost: "1.1"
+bootstrap:
+  database: db_homelab
+  owner: user_homelab
+  postInitTemplateSQL:
+    - CREATE EXTENSION IF NOT EXISTS timescaledb;
+    - CREATE EXTENSION IF NOT EXISTS postgis;
+    - CREATE EXTENSION IF NOT EXISTS postgis_topology;
+    - CREATE EXTENSION IF NOT EXISTS vector;
+    - CREATE EXTENSION IF NOT EXISTS pg_trgm;
+    - CREATE EXTENSION IF NOT EXISTS pgcrypto;
+    - CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+    - CREATE EXTENSION IF NOT EXISTS hstore;
+    - CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+    - CREATE EXTENSION IF NOT EXISTS pgaudit;
+monitoring:
+  enablePodMonitor: true
+storage:
+  storageClass: "local-storage"
+  size: 100Gi
+backup:
+  enabled: true
+  retentionPolicy: "30d"
+  barmanObjectStore:
+    destinationPath: "s3://postgres-main-backups/"
+    endpointURL: "http://minio.storage.svc.cluster.local:9000"
+    s3Credentials:
+      accessKeyId:
+        name: minio-secrets
+        key: root-user
+      secretAccessKey:
+        name: minio-secrets
+        key: root-password
+    wal:
+      compression: gzip
+    data:
+      compression: gzip
+pooler:
+  enabled: true
+  instances: 3
+  type: rw
+  poolMode: transaction
+  parameters:
+    max_client_conn: "1000"
+    default_pool_size: "20"
+
+lanAccess:
+  enabled: true
+  name: postgres-main-lan
+  loadBalancerIP: "10.0.0.19"
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: postgres-main.homelab.internal
+
+# --- Databases ---
+databases:
+  - name: affine
+    dbName: affine
+    owner: affine_user
+  - name: temporal
+    dbName: temporal
+    owner: temporal_user
+  - name: temporal-visibility
+    dbName: temporal_visibility
+    owner: temporal_user
+
+# --- Managed Roles ---
+managedRoles:
+  - name: affine-user
+    roleName: affine_user
+    secretStore:
+      name: cluster-k8s-store
+      kind: ClusterSecretStore
+    passwordMapping:
+      secretKey: affine-secrets
+      sourceKey: "db-password"
+      targetKey: "dbpassword"
+    inRoles:
+      - pg_read_all_data
+      - pg_write_all_data
+  - name: temporal-user
+    roleName: temporal_user
+    secretStore:
+      name: cluster-k8s-store
+      kind: ClusterSecretStore
+    passwordMapping:
+      secretKey: temporal-secrets
+      sourceKey: "db-password"
+      targetKey: "dbpassword"
+    inRoles:
+      - pg_read_all_data
+      - pg_write_all_data

@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "lidarr.fullname" .}}
+  labels:
+    {{- include "lidarr.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  {{- with .Values.deploymentStrategy }}
+  strategy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "lidarr.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "lidarr.labels" . | nindent 8 }}
+    spec:
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      initContainers:
+        - name: fix-permissions
+          image: "{{ .Values.initContainer.image.repository }}:{{ .Values.initContainer.image.tag }}"
+          imagePullPolicy: {{ .Values.initContainer.image.pullPolicy }}
+          command: [ "sh", "-c", "chown -R {{.Values.env.PUID}}:{{.Values.env.PGID}} {{.Values.persistence.media.mountPath}}" ]
+          volumeMounts:
+            - name: media-volume
+              mountPath: {{ .Values.persistence.media.mountPath }}
+      containers:
+        - name: lidarr
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: {{.Values.lidarr.port}}
+              name: http
+          env:
+            - name: TZ
+              value: "{{ .Values.env.TZ }}"
+            - name: PUID
+              value: "{{ .Values.env.PUID }}"
+            - name: PGID
+              value: "{{ .Values.env.PGID }}"
+            {{- range $key, $value := .Values.env }}
+            {{- if and (ne $key "TZ") (ne $key "PUID") (ne $key "PGID") }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+            {{- end }}
+          volumeMounts:
+            - name: config-volume
+              mountPath: {{ .Values.persistence.config.mountPath }}
+            - name: media-volume
+              mountPath: {{ .Values.persistence.media.mountPath }}
+            - name: downloads-volume
+              mountPath: {{ .Values.persistence.downloads.mountPath }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: config-volume
+          persistentVolumeClaim:
+            claimName: {{ include "lidarr.fullname" . }}-config-pvc
+        - name: media-volume
+          persistentVolumeClaim:
+            claimName: {{ include "lidarr.fullname" . }}-media-pvc
+        - name: downloads-volume
+          persistentVolumeClaim:
+            claimName: {{ include "lidarr.fullname" . }}-downloads-nfs-pvc

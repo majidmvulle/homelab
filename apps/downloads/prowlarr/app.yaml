@@ -1,0 +1,3 @@
+type: local
+chart: prowlarr
+namespace: downloads
